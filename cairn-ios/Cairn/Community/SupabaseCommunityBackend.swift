@@ -235,12 +235,9 @@ final class SupabaseCommunityBackend: CommunityBackend {
     private static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let plain = ISO8601DateFormatter()
         decoder.dateDecodingStrategy = .custom { decoder in
             let text = try decoder.singleValueContainer().decode(String.self)
-            if let date = withFraction.date(from: text) ?? plain.date(from: text) { return date }
+            if let date = ServerDate.parse(text) { return date }
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
                                                     debugDescription: "Unrecognised date \(text)"))
         }

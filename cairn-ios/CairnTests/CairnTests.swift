@@ -123,6 +123,28 @@ final class LocalCommunityTests: XCTestCase {
     }
 }
 
+final class ServerDateTests: XCTestCase {
+    // 2026-10-09 19:14:00 UTC
+    let expected = Date(timeIntervalSince1970: 1_791_573_240)
+
+    func testParsesPostgresTimestampWithMicroseconds() throws {
+        let date = try XCTUnwrap(ServerDate.parse("2026-10-09T19:14:00.123456+00:00"))
+        XCTAssertEqual(date.timeIntervalSince1970, expected.timeIntervalSince1970 + 0.123456, accuracy: 0.001)
+    }
+
+    func testParsesTimestampWithoutFraction() {
+        XCTAssertEqual(ServerDate.parse("2026-10-09T19:14:00+00:00"), expected)
+    }
+
+    func testParsesNonUTCOffset() {
+        XCTAssertEqual(ServerDate.parse("2026-10-09T20:14:00+01:00"), expected)
+    }
+
+    func testRejectsGarbage() {
+        XCTAssertNil(ServerDate.parse("yesterday"))
+    }
+}
+
 final class AscentExportTests: XCTestCase {
     func testEscapesCommasAndQuotes() {
         XCTAssertEqual(AscentExport.escape("plain"), "plain")
