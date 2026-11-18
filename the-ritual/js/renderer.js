@@ -72,24 +72,38 @@
         const rowDist = posZ / pp;
         const stepX = rowDist * (rdx1 - rdx0) / W, stepY = rowDist * (rdy1 - rdy0) / W;
         let fx = p.x + rowDist * rdx0, fy = p.y + rowDist * rdy0;
-        let lastCell = 1e9, room = null, tex = null;
+        let lastCell = 1e9, room = null, tex = null, sky = false;
+        const skyRooms = world.skyRooms, skyT = world.skyTint || [1, 1, 1];
         for (let x = 0; x < W; x++, fx += stepX, fy += stepY) {
           const cx = fx | 0, cy = fy | 0;
           const cell = cy * 64 + cx;
           if (cell !== lastCell) {
             lastCell = cell;
             room = map.roomAt(cx, cy);
-            tex = isFloor ? (T.floors[room] || T.floors.c) : ((T.ceilings && T.ceilings[room]) || T.ceiling);
+            sky = !isFloor && !!(skyRooms && skyRooms[room]);
+            tex = sky ? T.ceilings.L3sky : isFloor ? (T.floors[room] || T.floors.c) : ((T.ceilings && T.ceilings[room]) || T.ceiling);
             this.light(world, cx + 0.5, cy + 0.5, room, L);
           }
           // per-pixel candle falloff (cheap: only distance term recomputed every 4 px)
           if ((x & 3) === 0) this.light(world, fx, fy, room, L);
           const tx = ((fx - cx) * 64) & 63, ty = ((fy - cy) * 64) & 63;
           let c = tex.data[ty * 64 + tx];
+          if (sky) {
+            const r = (c & 255) * skyT[0], g = ((c >> 8) & 255) * skyT[1], b = ((c >> 16) & 255) * skyT[2];
+            buf[y * W + x] = 0xff000000 | ((b > 255 ? 255 : b) << 16) | ((g > 255 ? 255 : g) << 8) | (r > 255 ? 255 : r);
+            continue;
+          }
           if (isFloor && salt) {
             const d = Math.hypot(fx - salt.x, fy - salt.y);
-            if (Math.abs(d - salt.r) < 0.045 * salt.progress + 0.001 && Math.atan2(fy - salt.y, fx - salt.x) + Math.PI < salt.progress * Math.PI * 2 + 0.01)
-              c = 0xffe8e8f0;
+            if (Math.abs(d - salt.r) < 0.045 * salt.progress + 0.001 && Math.atan2(fy - salt.y, fx - salt.x) + Math.PI < salt.progress * Math.PI * 2 + 0.01) {
+              let keep = true;
+              if (salt.seg) {
+                const ang = (Math.atan2(fy - salt.y, fx - salt.x) + Math.PI * 2) % (Math.PI * 2);
+                const integ = salt.seg[Math.floor(ang / (Math.PI / 6)) % 12];
+                keep = integ > 0.05 && Math.random() < 0.35 + integ * 0.65;
+              }
+              if (keep) c = 0xffe8e8f0;
+            }
           }
           let r = (c & 255) * L[0], g = ((c >> 8) & 255) * L[1], b = ((c >> 16) & 255) * L[2];
           if (c === 0xffe8e8f0) { r = Math.max(r, 120); g = Math.max(g, 125); b = Math.max(b, 140); }
@@ -141,7 +155,7 @@
         this.light(world, hx - (side === 0 ? sx : 0) * 0.02, hy - (side === 1 ? sy : 0) * 0.02, room, L);
         if (side === 1) { L[0] *= 0.82; L[1] *= 0.82; L[2] *= 0.82; }
         let dtex = null, emissive = 0;
-        if (decal) { dtex = decal.door ? T.liftDoor : world.decalTex(decal); emissive = decal.emissive || 0; }
+        if (decal) { dtex = decal.door ? (world.doorTex ? world.doorTex(mx, my) : T.liftDoor) : world.decalTex(decal); emissive = decal.emissive || 0; }
         const lr = Math.max(L[0], emissive * 0.7), lg = Math.max(L[1], emissive * 0.8), lb = Math.max(L[2], emissive);
         const lineH = H / perp;
         const top = horizon - lineH / 2;

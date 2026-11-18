@@ -86,7 +86,10 @@
         decalAt(x, y, f) { return L.decals.get(RT.FACE_KEY(x, y, f)); },
       };
     }
-    decalTex(d) { return d.tex; }
+    decalTex(d) {
+      if (d.kind === 'front' && this.frontOpen) return RT.Tex.decals.rainDoor[((this.time * 9) | 0) % 3];
+      return d.tex;
+    }
     get sprites() {
       const out = this.floorProps.slice();
       for (const n of this.npcs) if (!n.hidden) out.push(n);
@@ -112,7 +115,7 @@
       add(9, 15, 'N', this.phase === 'woman' || this.phase === 'ascend' ? D.mirrorWoman : D.mirror);
       add(10, 11, 'N', D.callBtn, { kind: 'call' });
       if (grid === LOBBY) {
-        add(9, 0, 'S', D.lobbyDoors); add(0, 4, 'E', D.mailboxes); add(13, 9, 'W', D.notice);
+        add(9, 0, 'S', D.lobbyDoors, { kind: 'front' }); add(0, 4, 'E', D.mailboxes); add(13, 9, 'W', D.notice);
         add(5, 10, 'E', D.floorSign(1)); add(19, 4, 'W', D.cityWindow); add(0, 7, 'E', D.cityWindow);
       } else if (grid === CORR) {
         const other = style === 'q';
@@ -344,6 +347,10 @@
           if (!dec) return null;
           if (dec.kind === 'panel') return { label: '[E] Use the panel', act: () => this.openPanel() };
           if (dec.kind === 'call') return { label: '[E] Call the elevator', act: () => this.callElevator() };
+          if (dec.kind === 'front') return { label: this.frontOpen ? '[E] Close the door' : '[E] Open the front door', act: () => {
+            this.frontOpen = !this.frontOpen; RT.Audio.creak(0);
+            if (this.frontOpen) this.ui.say('Rain. Sheets of it, hammering the street.', 3);
+          } };
           if (dec.kind === 'cross' && !this.crossSeen) return { label: '[E] Look at the red cross', act: () => this.seeCross() };
           return null;
         }
@@ -364,9 +371,9 @@
       this.ui.bigText('THE OTHER WORLD', 3, 'You are the only living person here.');
       this.ui.say('Get back to the elevator. Do the sequence again to go home.', 5);
       // they know now
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < 1; i++) {
         const cells = [];
-        for (let y = 1; y < 11; y++) for (let x = 1; x < 19; x++) if (OTHER[y][x] === 'o' && RT.dist(x, y, this.player.x, this.player.y) > 6) cells.push([x + 0.5, y + 0.5]);
+        for (let y = 1; y < 11; y++) for (let x = 1; x < 19; x++) if (OTHER[y][x] === 'o' && RT.dist(x, y, this.player.x, this.player.y) > 9 && RT.dist(x, y, 9.5, 10.5) > 5) cells.push([x + 0.5, y + 0.5]);
         const [x, y] = RT.choice(cells); this.spawnOther(x, y);
       }
     }
@@ -421,6 +428,17 @@
       }
       input.take('relight'); input.take('salt');
 
+      // the lobby's front door: you are not going anywhere
+      if (this.grid === LOBBY && this.frontOpen && p.y < 1.5 && Math.abs(p.x - 9.5) < 0.7) {
+        this.wetT = (this.wetT || 0) - dt;
+        if (this.wetT <= 0) { this.wetT = 4; this.ui.say("It's far too wet out there - best not to try and leave.", 3.5); }
+      }
+      RT.Audio.setRain(this.grid === LOBBY ? (this.frontOpen ? 0.32 : 0.05) : 0);
+      // floor 6: the lights can't decide
+      if (this.style === 'p6') {
+        this.f6flick = (this.f6flick || 0) - dt;
+        if (this.f6flick <= 0) { this.roomLit.p6 = !this.roomLit.p6 || Math.random() < 0.3; this.f6flick = this.roomLit.p6 ? RT.rand(0.05, 0.9) : RT.rand(0.04, 0.35); if (Math.random() < 0.3) RT.Audio.click(); }
+      }
       this.updateDoors(dt);
       this.updateMotion(dt);
       this.updateNpcs(dt);
@@ -626,8 +644,8 @@
       const p = this.player, d = RT.dist(n.x, n.y, p.x, p.y);
       const ang = Math.abs(RT.angleDiff(Math.atan2(n.y - p.y, n.x - p.x), p.a));
       if (ang > 0.62 || !this.los(p.x, p.y, n.x, n.y)) return false;
-      if (d < 1.8) return true;
-      if (this.flashOn && this.battery > 0 && ang < 0.42 && d < 8.5) return true;
+      if (d < 2.6) return true;
+      if (this.flashOn && this.battery > 0 && ang < 0.5 && d < 9) return true;
       if (RT.dist(n.x, n.y, 2.5, 0.7) < 3) return true;           // in the red glow
       if (this.roomLit.e && RT.dist(n.x, n.y, 9.5, 12.5) < 3.2) return true;
       return false;
@@ -637,7 +655,7 @@
       const p = this.player;
       const awake = p.y < 11.2 || this.crossSeen;
       if (!awake) return;
-      const speed = this.crossSeen ? 1.9 : 1.25;
+      const speed = this.crossSeen ? 1.15 : 1.05;
       const ptx = p.x | 0, pty = p.y | 0;
       for (const n of this.npcs) {
         if (n.kind !== 'other' || n.hidden) continue;

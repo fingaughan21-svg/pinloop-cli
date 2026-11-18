@@ -133,4 +133,45 @@ body.touch #crosshair { display: none; }
 /* jumpscare */
 #jump { position: absolute; left: 50%; top: 50%; height: 115vh; width: 115vw; object-fit: cover; background: #000; transform: translate(-50%, -50%); image-rendering: pixelated; z-index: 20; pointer-events: none; animation: scare 0.09s infinite; }
 @keyframes scare { 0% { transform: translate(-50%, -50%) scale(1.0); } 50% { transform: translate(-48%, -52%) scale(1.08); } 100% { transform: translate(-52%, -49%) scale(1.03); } }
-body:not(.lvl2) .l2only { display: none; }
+
+
+.pwrow { display: flex; gap: 8px; }
+.pwrow input { flex: 1; font-family: var(--font); font-size: 22px; background: #0c0808; color: var(--ink); border: 1px solid #4a342a; padding: 4px 8px; }
+#achList .ach { display: flex; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #2a201c; }
+#achList .ico { width: 40px; height: 40px; border: 1px solid #4a342a; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #5a5048; }
+#achList .got .ico { color: #f0e2c0; border-color: var(--blood-hi); background: #3a0b0d; }
+#achList .t { font-size: 24px; } #achList .d { color: var(--dim); font-size: 18px; }
+#achList .ach:not(.got) .t { color: #6a6058; }
+#toast { position: absolute; left: 50%; top: 16px; transform: translateX(-50%); background: rgba(20, 8, 8, 0.95); border: 1px solid var(--blood-hi); padding: 8px 18px; font-size: 22px; z-index: 30; text-align: center; box-shadow: 0 0 20px #000; }
+#toast b { color: var(--blood-hi); font-weight: normal; }
+.lvl.soon::after { content: 'NOT IN DEMO'; }
+
+/* salt circle widget: forward is up */
+#ring { position: absolute; left: 50%; bottom: 27%; width: 120px; height: 120px; transform: translateX(-50%); }
+#ring .sg { position: absolute; left: 50%; top: 50%; width: 22px; height: 8px; margin: -4px 0 0 -11px; background: #e8e8f0; box-shadow: 0 0 4px #000; }
+#ring .sg.hit { animation: pulse 0.3s infinite alternate; }
+#ring .me { position: absolute; left: 50%; top: 50%; width: 0; height: 0; margin: -10px 0 0 -6px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 12px solid #f0e2c0; }
+#ring .lbl { position: absolute; top: 100%; width: 100%; text-align: center; font-size: 16px; color: var(--dim); }
+
+/* rotary phone */
+#phoneUI { position: absolute; right: 3vw; top: 50%; transform: translateY(-50%); width: 300px; background: rgba(14, 10, 8, 0.93); border: 1px solid #5a3a22; padding: 12px; z-index: 5; box-shadow: 0 0 30px #000; }
+.phdisp { font-size: 30px; letter-spacing: 4px; text-align: center; color: #f0e2c0; min-height: 36px; border-bottom: 1px solid #3a2a20; margin-bottom: 8px; }
+.dial { position: relative; width: 200px; height: 200px; margin: 0 auto 8px; border-radius: 50%; background: radial-gradient(#1a1a1a 30%, #0c0c0c 31%, #161616 70%); border: 3px solid #2a2a2a; transition: transform 0.35s ease-out; }
+.dial .hub { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: #d8d0b8; color: #222; font-size: 34px; display: flex; align-items: center; justify-content: center; }
+.dial button { position: absolute; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; padding: 0; background: #e8e0c8; color: #111; border: 2px solid #555; font-size: 20px; }
+.phbtns { display: flex; flex-direction: column; gap: 5px; }
+.phbtns button { font-size: 18px; padding: 4px 8px; text-align: left; }
+.phstat { margin-top: 6px; font-size: 17px; color: var(--dim); min-height: 20px; }
+/* choices */
+#choiceUI { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(520px, 92vw); background: rgba(10, 6, 6, 0.95); border: 1px solid var(--blood); padding: 16px; z-index: 8; }
+#choiceUI .ct { font-size: 24px; margin-bottom: 10px; color: #f0e2c0; }
+#choiceOpts { display: flex; flex-direction: column; gap: 8px; }
+#choiceOpts button { text-align: left; font-size: 22px; }
+/* the counting meter */
+#beat { position: absolute; left: 50%; top: 40%; width: 140px; height: 140px; transform: translate(-50%, -50%); z-index: 6; pointer-events: none; }
+#beat .ring { position: absolute; inset: 40px; border: 3px solid #f0e2c0; border-radius: 50%; box-shadow: 0 0 10px #000; }
+#beat .inner { position: absolute; left: 50%; top: 50%; width: 140px; height: 140px; margin: -70px 0 0 -70px; border: 2px solid var(--blood-hi); border-radius: 50%; }
+#beat .num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 40px; color: #f0e2c0; text-shadow: 0 0 6px #000; }
+#beat .lbl { position: absolute; top: 100%; width: 260px; left: -60px; text-align: center; font-size: 18px; color: var(--dim); }
+#pulse { position: absolute; top: 52px; right: 18px; font-size: 1.2em; color: #e8b0a8; }
+#pulse.high { color: var(--blood-hi); animation: pulse 0.3s infinite alternate; }

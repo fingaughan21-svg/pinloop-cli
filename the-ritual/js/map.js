@@ -44,6 +44,7 @@
     { x: 14, y: 11, f: 'E', kind: 'portrait' }, { x: 7, y: 6, f: 'S', kind: 'landscape' },
     { x: 16, y: 9, f: 'N', kind: 'portrait' }, { x: 7, y: 3, f: 'E', kind: 'landscape' },
     { x: 16, y: 3, f: 'E', kind: 'mirror' }, { x: 9, y: 14, f: 'E', kind: 'landscape' },
+    { x: 0, y: 15, f: 'E', kind: 'cellar' },
   ];
 
   // Props. h = world height (walls are 1.0). item = something you can take.
@@ -96,4 +97,56 @@
     OFFERING_POS: { x: 11.5, y: 16.55 },
     START: { x: 12.5, y: 4.2, a: -Math.PI / 2 + Math.PI },
   };
+})(window.RT);
+
+// ---------------- The cellar (Level 1 from 2:30 a.m.) ----------------
+// A fixed-seed maze of brick tunnels with a few loops, a boiler room and a
+// storage room. Same layout every time.
+(function (RT) {
+  const W = 27, H = 21;
+  let seed = 1337;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const g = Array.from({ length: H }, () => Array(W).fill('#'));
+  const stack = [[1, 1]]; g[1][1] = 'v';
+  while (stack.length) {
+    const [x, y] = stack[stack.length - 1];
+    const dirs = [[2, 0], [-2, 0], [0, 2], [0, -2]].filter(([dx, dy]) => { const nx = x + dx, ny = y + dy; return nx > 0 && ny > 0 && nx < W - 1 && ny < H - 1 && g[ny][nx] === '#'; });
+    if (!dirs.length) { stack.pop(); continue; }
+    const [dx, dy] = dirs[Math.floor(rnd() * dirs.length)];
+    g[y + dy / 2][x + dx / 2] = 'v'; g[y + dy][x + dx] = 'v'; stack.push([x + dx, y + dy]);
+  }
+  // knock through some walls so there are loops to run round
+  let loops = 0;
+  for (let i = 0; i < 400 && loops < 26; i++) {
+    const x = 1 + Math.floor(rnd() * (W - 2)), y = 1 + Math.floor(rnd() * (H - 2));
+    if (g[y][x] !== '#') continue;
+    const h = g[y][x - 1] === 'v' && g[y][x + 1] === 'v' && g[y - 1][x] === '#' && g[y + 1][x] === '#';
+    const v = g[y - 1][x] === 'v' && g[y + 1][x] === 'v' && g[y][x - 1] === '#' && g[y][x + 1] === '#';
+    if (h || v) { g[y][x] = 'v'; loops++; }
+  }
+  const room = (x0, y0, x1, y1, c) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) g[y][x] = c; };
+  room(17, 8, 22, 12, 'w');   // boiler room
+  room(3, 14, 7, 17, 'x');    // storage
+  room(1, 1, 2, 2, 'u');      // foot of the stairs
+  const GRID = g.map((r) => r.join(''));
+
+  const DECALS = [
+    { x: 0, y: 1, f: 'E', kind: 'stairs' },
+    { x: 17, y: 7, f: 'S', kind: 'handprints' }, { x: 9, y: 0, f: 'S', kind: 'handprints' },
+    { x: 26, y: 15, f: 'W', kind: 'handprints' }, { x: 2, y: 13, f: 'S', kind: 'tally' }, { x: 13, y: 20, f: 'N', kind: 'tally' },
+  ].filter((d) => {
+    // only keep decals whose face actually looks onto a tunnel
+    const o = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] }[d.f];
+    const r = GRID[d.y + o[1]]; return GRID[d.y][d.x] === '#' && r && r[d.x + o[0]] && r[d.x + o[0]] !== '#';
+  });
+  const PROPS = [
+    { tex: 'boiler', x: 19.5, y: 10, h: 0.95, solid: 0.55, glow: true },
+    { tex: 'crate', x: 21.6, y: 8.5, h: 0.45, solid: 0.3 },
+    { tex: 'barrel', x: 17.5, y: 12.4, h: 0.5, solid: 0.25 },
+    { tex: 'bookshelf', x: 3.4, y: 14.4, h: 1.0, solid: 0.3 },
+    { tex: 'crate', x: 6.6, y: 16.6, h: 0.45, solid: 0.3, item: 'matches3' },
+    { tex: 'dollChair', x: 4.5, y: 17.3, h: 0.55, solid: 0.2 },
+    { tex: 'crate', x: 7.5, y: 14.5, h: 0.45, solid: 0.3 },
+  ];
+  RT.Cellar = { GRID, W, H, DECALS, PROPS, START: { x: 1.6, y: 1.6, a: Math.PI / 4 }, ROOMS: ['v', 'w', 'x', 'u'] };
 })(window.RT);

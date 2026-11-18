@@ -131,6 +131,16 @@
       }
       this.hum.gain.setTargetAtTime(v, this.ctx.currentTime, 0.3);
     },
+    setRain(v) {
+      if (!this.ctx) return;
+      if (!this.rain) {
+        const ctx = this.ctx; this.rain = ctx.createGain(); this.rain.gain.value = 0; this.out(this.rain, 0.2);
+        const n = this.noise('white', true), hp = ctx.createBiquadFilter(), lp = ctx.createBiquadFilter();
+        hp.type = 'highpass'; hp.frequency.value = 900; lp.type = 'lowpass'; lp.frequency.value = 6000;
+        n.connect(hp); hp.connect(lp); lp.connect(this.rain); n.start();
+      }
+      this.rain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.4);
+    },
     // a cheap, slightly broken music box: elevator music for the end of the world
     music(on, detune = 0) {
       this.musicOn = on; this.musicDetune = detune;

@@ -470,5 +470,6 @@
     }
     T.offering = [S.doorOffering(0), S.doorOffering(1), S.doorOffering(2, 0), S.doorOffering(2, 1)];
     if (RT.buildTextures2) RT.buildTextures2(T);
+    if (RT.buildTextures3) RT.buildTextures3(T);
   };
 })(window.RT);

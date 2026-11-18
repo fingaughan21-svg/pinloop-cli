@@ -278,6 +278,21 @@
       g.fillStyle = '#c8a050'; g.fillRect(44, 22, 2, 1); g.fillStyle = 'rgba(160,170,190,0.25)'; g.fillRect(10, 8, 2, 50); g.fillRect(36, 8, 2, 50);
       g.fillStyle = '#d0c070'; g.fillRect(28, 32, 2, 8); g.fillRect(34, 32, 2, 8);
     });
+    // the lobby's front door, open on a street drowning in rain (3 frames)
+    D.rainDoor = [0, 1, 2].map((f) => U.canvasTex(64, 64, (g) => {
+      g.fillStyle = '#2a2a2a'; g.fillRect(4, 2, 56, 62);
+      const sky = g.createLinearGradient(0, 5, 0, 64); sky.addColorStop(0, '#0a0e16'); sky.addColorStop(0.65, '#121820'); sky.addColorStop(1, '#1a2028');
+      g.fillStyle = sky; g.fillRect(7, 5, 50, 59);
+      g.fillStyle = '#05070a'; g.fillRect(7, 30, 12, 26); g.fillRect(40, 24, 17, 32);          // buildings opposite
+      g.fillStyle = '#c8a050'; g.fillRect(44, 30, 2, 2); g.fillRect(50, 38, 2, 2); g.fillRect(10, 36, 2, 2);
+      g.fillStyle = '#d8c070'; g.fillRect(30, 18, 3, 2); g.fillStyle = '#333'; g.fillRect(31, 20, 1, 36);   // street lamp
+      g.fillStyle = 'rgba(220,190,110,0.18)'; g.beginPath(); g.moveTo(31, 20); g.lineTo(20, 56); g.lineTo(44, 56); g.closePath(); g.fill();
+      g.fillStyle = '#20262e'; g.fillRect(7, 56, 50, 8);
+      g.fillStyle = 'rgba(190,200,220,0.55)';
+      for (let i = 0; i < 70; i++) { const x = 7 + ((i * 37 + f * 11) % 50), y = 5 + ((i * 53 + f * 19) % 56); g.fillRect(x, y, 1, 3); }
+      g.fillStyle = 'rgba(200,210,230,0.5)'; for (let i = 0; i < 6; i++) g.fillRect(9 + ((i * 17 + f * 23) % 46), 58 + (i % 3), 2, 1); // splashes
+      g.fillStyle = '#2a2a2a'; g.fillRect(4, 2, 3, 62); g.fillRect(57, 2, 3, 62);
+    }, 0.04, 120 + f));
     D.mailboxes = U.canvasTex(64, 64, (g) => {
       g.fillStyle = '#7a6a40'; g.fillRect(8, 14, 48, 30);
       for (let i = 0; i < 12; i++) { g.fillStyle = '#5a4a28'; g.fillRect(10 + (i % 6) * 8, 16 + Math.floor(i / 6) * 14, 6, 11); g.fillStyle = '#222'; g.fillRect(12 + (i % 6) * 8, 18 + Math.floor(i / 6) * 14, 2, 1); }
@@ -316,9 +331,70 @@
     T.other = [other(0), other(1)];
   }
 
+  function cellar(T) {
+    const U = RT.TexUtil, D = T.decals, S = T.sprites;
+    const brick = (base, s) => U.makeTex(64, 64, (x, y) => {
+      const row = Math.floor(y / 8), off = (row % 2) * 8;
+      const mortar = y % 8 === 0 || (x + off) % 16 === 0;
+      const tone = 0.75 + hash(Math.floor((x + off) / 16), row, s) * 0.35;
+      const damp = y > 40 ? 0.7 + (64 - y) / 80 : 1;
+      return U.shade(mortar ? [40, 36, 32] : base, (mortar ? 1 : tone) * damp * U.stains(x, y, s) * (0.9 + hash(x, y, s) * 0.15));
+    });
+    T.walls.v = brick([92, 46, 34], 51); T.walls.u = T.walls.v;
+    T.walls.w = U.makeTex(64, 64, (x, y) => { const rivet = (x % 16 === 3 && y % 16 === 3); const rust = RT.fbm(x / 9, y / 9, 52, 3); return rivet ? [30, 26, 22] : U.shade(rust > 0.55 ? [110, 56, 26] : [70, 66, 60], 0.75 + hash(x, y, 53) * 0.3); });
+    T.walls.x = U.planks(54, [74, 52, 34]);
+    const conc = (s, wet) => U.makeTex(64, 64, (x, y) => { const pud = wet && RT.fbm(x / 12, y / 12, s, 3) > 0.62; const v = 64 + hash(x, y, s) * 18; return pud ? [28, 32, 38] : U.shade([v, v - 2, v - 6], U.stains(x, y, s + 1)); });
+    T.floors.v = conc(55, true); T.floors.u = T.floors.v; T.floors.x = U.planks(56, [60, 42, 28]);
+    T.floors.w = U.makeTex(64, 64, (x, y) => ((x % 8 < 2) || (y % 8 < 2)) ? [60, 58, 54] : [14, 12, 10]);
+    const pipes = U.makeTex(64, 64, (x, y) => {
+      if (Math.abs((y % 32) - 10) < 3) return U.shade([90, 70, 50], 0.7 + (3 - Math.abs((y % 32) - 10)) * 0.15);
+      if (Math.abs(x - 40) < 2) return [70, 60, 50];
+      const v = 40 + hash(x, y, 57) * 14; return [v, v, v];
+    });
+    T.ceilings.v = pipes; T.ceilings.u = pipes; T.ceilings.w = pipes; T.ceilings.x = U.ceiling(58);
+    D.stairs = U.canvasTex(64, 64, (g) => {
+      g.fillStyle = '#1a1612'; g.fillRect(8, 0, 48, 64);
+      for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#3a2e24' : '#4a3a2c'; g.fillRect(8 + i * 2, 56 - i * 7, 48 - i * 4, 7); }
+      g.fillStyle = '#5a3a22'; g.fillRect(26, 2, 12, 9); g.fillStyle = '#0a0806'; g.fillRect(27, 10, 10, 1);
+    });
+    D.tally = U.canvasTex(64, 64, (g) => {
+      g.strokeStyle = 'rgba(210,200,180,0.75)'; g.lineWidth = 1;
+      for (let k = 0; k < 4; k++) for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(12 + k * 11 + i * 2, 20); g.lineTo(12 + k * 11 + i * 2, 30); g.stroke(); }
+      for (let k = 0; k < 4; k++) { g.beginPath(); g.moveTo(10 + k * 11, 28); g.lineTo(21 + k * 11, 22); g.stroke(); }
+      g.fillStyle = 'rgba(210,200,180,0.75)'; g.font = '7px monospace'; g.fillText('3:33', 22, 44);
+    });
+    D.cellarDoor = U.canvasTex(64, 64, (g) => {
+      g.fillStyle = '#2a1a10'; g.fillRect(14, 4, 36, 60); g.fillStyle = '#4a3020'; g.fillRect(17, 7, 30, 57);
+      g.fillStyle = '#3a2416'; for (let y = 10; y < 62; y += 9) g.fillRect(17, y, 30, 2);
+      g.fillStyle = '#777'; g.fillRect(40, 34, 4, 3); g.fillStyle = '#555'; g.fillRect(30, 30, 6, 8); // padlock
+    });
+    D.cellarOpen = U.canvasTex(64, 64, (g) => {
+      g.fillStyle = '#2a1a10'; g.fillRect(14, 4, 36, 60); g.fillStyle = '#020202'; g.fillRect(17, 7, 30, 57);
+      for (let i = 0; i < 6; i++) { g.fillStyle = `rgb(${20 - i * 3},${16 - i * 2},${14 - i * 2})`; g.fillRect(19 + i, 56 - i * 8, 26 - i * 2, 3); }
+      g.fillStyle = '#4a3020'; g.fillRect(17, 7, 5, 57);
+    });
+    S.boiler = U.canvasTex(48, 64, (g) => {
+      g.fillStyle = '#3a3630'; g.fillRect(4, 8, 40, 56); g.fillStyle = '#2a2622'; g.fillRect(4, 8, 40, 4);
+      g.fillStyle = '#ff7a20'; g.fillRect(14, 40, 20, 10); g.fillStyle = '#ffd060'; g.fillRect(18, 44, 12, 4);
+      g.fillStyle = '#1a1612'; for (let x = 14; x < 34; x += 4) g.fillRect(x, 40, 1, 10);
+      g.fillStyle = '#5a5248'; g.fillRect(20, 0, 8, 8); g.fillRect(8, 20, 32, 3);
+    });
+    S.crate = U.canvasTex(40, 36, (g) => { g.fillStyle = '#6a4a28'; g.fillRect(2, 4, 36, 32); g.fillStyle = '#4a3218'; g.fillRect(2, 4, 36, 3); g.fillRect(2, 18, 36, 2); g.fillRect(2, 4, 3, 32); g.fillRect(35, 4, 3, 32); g.beginPath(); g.moveTo(4, 6); g.lineTo(36, 34); g.lineWidth = 2; g.strokeStyle = '#4a3218'; g.stroke(); });
+    S.crate_item = U.canvasTex(40, 36, (g) => { g.drawImage(S.crate.canvas, 0, 0); g.fillStyle = '#b8332a'; g.fillRect(14, 1, 10, 4); g.fillStyle = '#e0d4a0'; g.fillRect(16, 2, 6, 1); });
+    T.v.crate = S.crate; T.v.crate_item = S.crate_item;
+    S.barrel = U.canvasTex(32, 40, (g) => { g.fillStyle = '#4a3a2a'; g.fillRect(4, 2, 24, 38); g.fillStyle = '#2a2a2a'; g.fillRect(4, 8, 24, 3); g.fillRect(4, 30, 24, 3); g.fillStyle = '#5a4a3a'; g.fillRect(8, 2, 3, 38); });
+    S.dollChair = U.canvasTex(32, 44, (g) => {
+      g.fillStyle = '#3c2513'; g.fillRect(6, 0, 3, 44); g.fillRect(23, 0, 3, 44); g.fillRect(6, 24, 20, 3);
+      g.fillStyle = '#d8ccb8'; g.beginPath(); g.arc(16, 12, 5, 0, 7); g.fill();
+      g.fillStyle = '#000'; g.fillRect(13, 11, 2, 2); g.fillRect(17, 11, 2, 2); g.fillStyle = '#7a1a1a'; g.fillRect(14, 15, 4, 1);
+      g.fillStyle = '#6a2a3a'; g.fillRect(11, 17, 10, 8); g.fillStyle = '#2a1a0a'; g.fillRect(10, 6, 12, 3);
+    });
+  }
+
   RT.buildTextures2 = function (T) {
     T.mm = [midnightMan(0), midnightMan(1), midnightMan(2)];
     T.faces = { mm: mmFace(), woman: womanFace(), other: otherFace() };
     build(T);
+    cellar(T);
   };
 })(window.RT);

@@ -10,18 +10,18 @@
   const SALT_POUR_TIME = 2.2;
   const ROOMS = ['c', 's', 'r', 'b', 'k', 'h', 'l'];
 
-  function buildMap() {
-    const decals = new Map();
-    for (const d of M.DECALS) {
+  function buildMap(src) {
+    const decals = new Map(), G = src.GRID, MW = src.W, MH = src.H;
+    for (const d of src.DECALS) {
       const dd = Object.assign({}, d);
       if (d.kind === 'window') dd.emissive = 0.13;
       if (d.kind === 'windowFrost') dd.emissive = 0.1;
       decals.set(RT.FACE_KEY(d.x, d.y, d.f), dd);
     }
     return {
-      W: M.W, H: M.H,
-      isWall(x, y) { if (x < 0 || y < 0 || x >= M.W || y >= M.H) return true; const c = M.GRID[y][x]; return c === '#' || c === 'D'; },
-      roomAt(x, y) { if (x < 0 || y < 0 || x >= M.W || y >= M.H) return null; const c = M.GRID[y][x]; return c === '#' || c === 'D' ? null : c; },
+      W: MW, H: MH,
+      isWall(x, y) { if (x < 0 || y < 0 || x >= MW || y >= MH) return true; const c = G[y][x]; return c === '#' || c === 'D'; },
+      roomAt(x, y) { if (x < 0 || y < 0 || x >= MW || y >= MH) return null; const c = G[y][x]; return c === '#' || c === 'D' ? null : c; },
       decalAt(x, y, f) { return decals.get(RT.FACE_KEY(x, y, f)); },
       decals,
     };
@@ -32,11 +32,12 @@
       this.game = game;
       this.ui = game.ui;
       this.timeScaleDebug = opts.speed || 1;
-      this.map = buildMap();
+      this.map = buildMap(M);
       const s = M.START;
       this.player = { x: s.x, y: s.y, a: s.a, bob: 0, walkPhase: 0, stepAcc: 0 };
       this.inv = { paper: false, needle: false, candle: false, matches: 0, salt: false, lighter: false, flashlight: false };
       this.roomLit = {}; for (const r of ROOMS) this.roomLit[r] = true;
+      for (const r of RT.Cellar.ROOMS) this.roomLit[r] = false;
       this.phase = 'prep';
       this.prep = { name: null, blood: false, paperTaken: false, offering: -1, knocks: 0, knockCD: 0, doorOpen: false, blown: false, closed: false };
       this.candleLit = false;
@@ -59,16 +60,9 @@
 
       // sprites
       this.sprites = [];
-      this.props = M.PROPS.map((p) => {
-        const sp = Object.assign({ z: 0 }, p, { taken: false });
-        sp.getTex = () => {
-          const T = RT.Tex;
-          if (T.v[p.tex]) return T.v[p.tex + (p.item && !sp.taken ? '_item' : '')];
-          return T.sprites[p.tex];
-        };
-        this.sprites.push(sp);
-        return sp;
-      });
+      this.props = this.makeProps(M.PROPS);
+      this.sprites.push(...this.props);
+
       this.offering = { x: M.OFFERING_POS.x, y: M.OFFERING_POS.y, h: 0.2, z: 0, hidden: true, getTex: (t) => {
         const st = this.prep.offering; if (st < 0) return null;
         if (st === 2) return RT.Tex.offering[2 + ((t * 6) | 0) % 2];
@@ -98,6 +92,7 @@
       switch (d.kind) {
         case 'switch': return this.roomLit[d.room] ? T.switchOn : T.switchOff;
         case 'frontDoor': d.emissive = this.prep.doorOpen ? 0.1 : 0; return this.prep.doorOpen ? T.doorOpen : T.door;
+        case 'cellar': return this.flags.cellarOpen ? T.cellarOpen : T.cellarDoor;
         default: return T[d.kind];
       }
     }
@@ -109,6 +104,19 @@
         matchFlame: this.strike && this.strike.flame,
         lower: this.saltWin && this.saltWin.pour > 0 ? 30 : 0,
       };
+    }
+
+    makeProps(list) {
+      return list.map((p) => {
+        const sp = Object.assign({ z: 0 }, p, { taken: false });
+        sp.getTex = () => {
+          const T = RT.Tex;
+          if (T.v[p.tex]) return T.v[p.tex + (p.item && !sp.taken ? '_item' : '')];
+          return T.sprites[p.tex];
+        };
+        if (p.glow) sp.emissive = 0.6;
+        return sp;
+      });
     }
 
     // ---------- helpers ----------
@@ -125,7 +133,7 @@
     }
     // BFS distance field (4-neighbour) to a target cell
     field(tx, ty) {
-      const W = M.W, H = M.H, f = new Int16Array(W * H).fill(-1), q = [ty * W + tx];
+      const W = this.map.W, H = this.map.H, f = new Int16Array(W * H).fill(-1), q = [ty * W + tx];
       f[ty * W + tx] = 0;
       for (let qi = 0; qi < q.length; qi++) {
         const c = q[qi], cx = c % W, cy = (c / W) | 0;
@@ -140,7 +148,7 @@
     }
     walkableCells() {
       if (this._cells) return this._cells;
-      const out = []; for (let y = 0; y < M.H; y++) for (let x = 0; x < M.W; x++) if (!this.map.isWall(x, y)) out.push([x, y]);
+      const out = []; for (let y = 0; y < this.map.H; y++) for (let x = 0; x < this.map.W; x++) if (!this.map.isWall(x, y)) out.push([x, y]);
       return (this._cells = out);
     }
 
@@ -150,7 +158,7 @@
       const p = this.player;
       if (this.phase === 'dead' || this.phase === 'over') return;
 
-      RT.movePlayer(this, dt, input, { frozen: !!this.swing || (this.saltWin && input.down('salt')) });
+      RT.movePlayer(this, dt, input, { frozen: !!this.swing || (this.saltWin && input.down('salt')), speed: this.phase === 'trapped' ? 0.8 : 2.0 });
       this.updateStrike(dt);
       if (this.swing) this.swing.update(dt, input);
       if (this.smoke > 0) this.smoke = Math.max(0, this.smoke - dt * 0.4);
@@ -178,6 +186,7 @@
       if (this.candleLit && this.inv.candle) L.push({ x: p.x + Math.cos(p.a) * 0.2, y: p.y + Math.sin(p.a) * 0.2, radius: 5.2, intensity: 1.35 * fl, r: 1, g: 0.7, b: 0.4 });
       if (this.prep.offering === 2) L.push({ x: this.offering.x, y: this.offering.y - 0.1, radius: 4.2, intensity: 1.2 * fl, r: 1, g: 0.7, b: 0.4 });
       if (this.strike && this.strike.flame) L.push({ x: p.x, y: p.y, radius: 2.6, intensity: 0.9, r: 1, g: 0.75, b: 0.45 });
+      if (this.inCellar) L.push({ x: 19.5, y: 10.4, radius: 3.6, intensity: 0.9 + Math.sin(this.time * 9) * 0.08, r: 1, g: 0.45, b: 0.15 });
       if (this.flashOn) L.push({ x: p.x, y: p.y, radius: 9, intensity: 1.8, r: 0.95, g: 0.95, b: 0.88, cone: true, dx: Math.cos(p.a), dy: Math.sin(p.a) });
       this.ambient = this.phase === 'prep' ? 0.07 : this.phase === 'halluc' ? 0.6 + Math.sin(this.time * 1.7) * 0.15 : 0.04;
       this.saltCircleRender = this.saltCircle || (this.saltWin && this.saltWin.pour > 0 ? { x: this.saltWin.x, y: this.saltWin.y, r: 0.75, progress: this.saltWin.pour / SALT_POUR_TIME } : null);
@@ -198,7 +207,7 @@
           const px = (p.x + ca * (d - 0.05)) | 0, py = (p.y + sa * (d - 0.05)) | 0;
           const f = px < cx ? 'W' : px > cx ? 'E' : py < cy ? 'N' : 'S';
           const dec = this.map.decalAt(cx, cy, f);
-          if (dec && (dec.kind === 'switch' || dec.kind === 'frontDoor')) { best = this.decalAction(dec); bestD = d; }
+          if (dec && (dec.kind === 'switch' || dec.kind === 'frontDoor' || dec.kind === 'cellar' || dec.kind === 'stairs')) { best = this.decalAction(dec); bestD = d; }
           break;
         }
       }
@@ -226,6 +235,11 @@
           if (!on && this.phase !== 'prep') this.die('light');
         } };
       }
+      if (dec.kind === 'cellar') {
+        if (!this.flags.cellarOpen) return { label: '[E] Cellar door', act: () => this.ui.say(this.phase === 'prep' ? 'The cellar. You never go down there.' : 'Locked. It is always locked.', 2.5) };
+        return { label: '[E] Go down into the cellar', act: () => this.enterCellar() };
+      }
+      if (dec.kind === 'stairs') return { label: 'The stairs', act: () => this.ui.say('The door at the top is shut. It will not open until 3:33.', 3) };
       // front door
       const pr = this.prep;
       if (this.phase !== 'prep') return { label: '[E] Front door', act: () => this.ui.say('The handle will not turn. It is not 3:33 yet.', 3) };
@@ -297,13 +311,14 @@
         return { label: 'Your bed', act: () => this.ui.say('Not tonight.', 2) };
       }
       if (!s.item || s.taken) return null;
-      const names = { matches: 'a box of matches', matches2: 'a few loose matches', salt: 'the salt', candle: 'the candle', lighter: 'a lighter', flashlight: 'a flashlight', needle: 'a sewing needle' };
+      const names = { matches3: 'a damp box of matches', matches: 'a box of matches', matches2: 'a few loose matches', salt: 'the salt', candle: 'the candle', lighter: 'a lighter', flashlight: 'a flashlight', needle: 'a sewing needle' };
       return { label: `[E] Take ${names[s.item]}`, act: () => {
         s.taken = true; RT.Audio.pickup();
         const i = this.inv;
         switch (s.item) {
           case 'matches': i.matches += 20; this.ui.say('Matches. 20 of them.', 2.5); break;
           case 'matches2': i.matches += 10; this.ui.say('10 more matches.', 2.5); break;
+          case 'matches3': i.matches += 8; this.ui.say('8 matches. Damp, but they might strike.', 2.5); break;
           case 'salt': i.salt = true; this.ui.say('A full canister of salt.', 2.5); break;
           case 'candle': i.candle = true; this.ui.say('A plain white candle.', 2.5); break;
           case 'lighter': i.lighter = true; this.ui.say('A lighter. Easier than matches...', 3); break;
@@ -354,6 +369,7 @@
         provoke: ['YOU PROVOKED HIM', 'You reached out to it. It reached back.'],
         caught: ['HE FOUND YOU', 'Cold fingers in the dark. The Midnight Man does not lose his own game.'],
         circle: ['YOU LEFT THE CIRCLE', 'One step past the salt. He had been waiting for it.'],
+        breach: ['THE CIRCLE BROKE', 'A gap no wider than a finger. It was enough.'],
       };
       const stats = this.phase === 'dead' && this.minutes === 0 ? '' : `Clock: ${RT.fmtClock(Math.min(this.minutes, END_MINUTE))}  ·  Matches left: ${this.inv.matches}`;
       if (kind === 'win') return { win: true, title: '3:33 A.M.', text: `The cold lifts. The whispering stops. The Midnight Man leaves your house, and the sky outside begins to grey. ${name}, you won the Midnight Game.`, stats, next: 'Next: <b>Level 2 &mdash; The Elevator</b>' };
@@ -462,7 +478,7 @@
       let scale = this.timeScaleDebug;
       if (this.phase === 'trapped' || this.phase === 'halluc') {
         scale *= this.phase === 'halluc' && this.haTime > 6 ? 20 : 1;
-        if (input.down('wait')) scale *= this.phase === 'halluc' ? 3 : 40;
+        if (input.down('wait') && this.phase === 'halluc') scale *= 3;
       }
       const before = this.minutes;
       this.minutes += dt * scale / SECONDS_PER_GAME_MINUTE;
@@ -487,6 +503,18 @@
       if (idle > 30 && !this.flags.drowsy) { this.flags.drowsy = true; this.ui.say('Your eyelids are so heavy...', 3); }
       if (idle < 5) this.flags.drowsy = false;
       if (idle > 50) return this.die('sleep');
+
+      // 2:30 a.m.: the house wants you downstairs
+      if (!this.flags.cellarOpen && this.minutes >= 150 && !this.candleOut && !this.saltWin && !this.strike && !this.swing) {
+        this.flags.cellarOpen = true; this.hostileT = 0;
+        RT.Audio.thud(); RT.Audio.creak(0);
+        this.ui.bigText('2:30 A.M.', 3, 'Something below the kitchen unlatches.');
+        this.ui.say('The cellar door is open. The rest of the night is down there. Go now.', 5);
+      }
+      if (this.flags.cellarOpen && !this.inCellar) {
+        this.hostileT += dt;
+        if (this.hostileT > 25 && !this.flags.hostileMsg) { this.flags.hostileMsg = true; this.ui.say('The house will not hide you any more. GO DOWN.', 4); }
+      }
 
       // standing still: he will find you
       this.posTimer += dt;
@@ -517,7 +545,7 @@
           if (sw.pour === 0) { sw.x = p.x; sw.y = p.y; }
           sw.pour += dt;
           if (sw.pour >= SALT_POUR_TIME) {
-            this.saltCircle = { x: sw.x, y: sw.y, r: 0.75, progress: 1 };
+            this.saltCircle = { x: sw.x, y: sw.y, r: 0.75, progress: 1, seg: new Float32Array(12).fill(1) };
             this.saltWin = null;
             return this.startTrapped();
           }
@@ -531,7 +559,7 @@
     showMM(on) { this.mm.sprite.hidden = !on; }
     placeMM(x, y) { this.mm.x = x; this.mm.y = y; this.mm.field = null; }
     pickSpot(minD, maxD, hidden) {
-      const p = this.player, f = this.field(p.x | 0, p.y | 0), W = M.W;
+      const p = this.player, f = this.field(p.x | 0, p.y | 0), W = this.map.W;
       const ok = [], fallback = [];
       for (const [x, y] of this.walkableCells()) {
         const d = f[y * W + x]; if (d < minD || d > maxD) continue;
@@ -560,13 +588,17 @@
       mm.state = 'retreat'; mm.timer = 2.5;
       mm.nextVisit = this.visitDelay();
     }
-    visitDelay() { const f = this.diff(); return RT.lerp(52, 20, f) * RT.rand(0.8, 1.25); }
-    huntSpeed() { return RT.lerp(1.25, 2.0, this.diff()); }
+    visitDelay() {
+      const f = this.diff();
+      if (this.flags.cellarOpen && !this.inCellar) return this.hostileT > 25 ? 6 : 14;     // you were told to go down
+      return RT.lerp(52, 20, f) * RT.rand(0.8, 1.25) * (this.inCellar ? 0.85 : 1);
+    }
+    huntSpeed() { return RT.lerp(1.25, 2.0, this.diff()) * (this.flags.cellarOpen && !this.inCellar && this.hostileT > 25 ? 1.35 : 1); }
     blowRadius() { return RT.lerp(2.5, 3.6, this.diff()); }
     stillLimit() { return Math.round(RT.lerp(22, 12, this.diff())); }
 
     stepToward(gx, gy, speed, dt) {
-      const mm = this.mm, W = M.W;
+      const mm = this.mm, W = this.map.W;
       const tc = (gy | 0) * W + (gx | 0);
       mm.fieldT -= dt;
       if (!mm.field || mm.fieldTarget !== tc || mm.fieldT <= 0) { mm.field = this.field(gx | 0, gy | 0); mm.fieldTarget = tc; mm.fieldT = 0.5; }
@@ -658,21 +690,88 @@
       if (mm.state !== 'gone' && d < 10 && Math.random() < dt * 0.25) RT.Audio.creak(RT.clamp(Math.sin(RT.angleDiff(Math.atan2(mm.y - p.y, mm.x - p.x), p.a)), -1, 1));
     }
 
+    // ---------- the cellar ----------
+    enterCellar() {
+      this.inCellar = true;
+      this.map = buildMap(RT.Cellar);
+      this._cells = null;
+      this.props = this.makeProps(RT.Cellar.PROPS);
+      this.offering.hidden = true;
+      this.sprites = [...this.props, this.offering, this.mm.sprite, ...this.phantoms];
+      const st = RT.Cellar.START;
+      Object.assign(this.player, { x: st.x, y: st.y, a: st.a });
+      this.positions = [];
+      this.mm.state = 'gone'; this.mm.timer = 12; this.showMM(false);
+      this.mm.nextVisit = Math.max(this.mm.nextVisit, 18);
+      this.ui.flash('rgba(0,0,0,1)');
+      RT.Audio.thud();
+      this.ui.bigText('THE CELLAR', 3, 'The door slams shut above you.');
+      this.ui.say('Tunnels. Brick, water, and the dark. Keep moving.', 4);
+    }
+
     // ---------- salt circle / hallucination ----------
+    // The circle is not a place to wait. He circles it and wears away at the
+    // salt, usually behind you. Face the gap and hold Q to pour it back.
+    // Salt is limited, and the clock runs at its normal speed.
     startTrapped() {
       this.phase = 'trapped';
       this.mm.state = 'circle'; this.showMM(true);
       this.mm.angle = Math.atan2(this.mm.y - this.saltCircle.y, this.mm.x - this.saltCircle.x);
+      this.saltLeft = 1; this.breaches = []; this.nextBreach = 4;
       RT.Audio.stinger();
-      this.ui.say('The circle is closed. It cannot cross the salt.', 4);
-      setTimeout(() => this.phase === 'trapped' && this.ui.say('You must stay inside until 3:33.  Hold [SPACE] to wait it out.', 6), 4200);
+      this.ui.say('The circle is closed. He cannot cross the salt... while it is whole.', 4);
+      setTimeout(() => this.phase === 'trapped' && this.ui.say('He is wearing the salt away. Face the gap and HOLD [Q] to mend it. Stay inside until 3:33.', 6), 4200);
     }
+    segAt(a) { const n = 12, t = ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2); return Math.floor(t / (Math.PI * 2 / n)) % n; }
     updateTrapped(dt) {
-      const c = this.saltCircle, p = this.player, mm = this.mm;
-      mm.angle += dt * 0.35;
-      mm.x = c.x + Math.cos(mm.angle) * 1.5; mm.y = c.y + Math.sin(mm.angle) * 1.5;
-      if (!this.walkable(mm.x, mm.y)) { mm.x = c.x + Math.cos(mm.angle) * 1.0; mm.y = c.y + Math.sin(mm.angle) * 1.0; }
+      const c = this.saltCircle, p = this.player, mm = this.mm, seg = c.seg, input = this.game.input;
+      const f = this.diff();
+      // start new breaches
+      this.nextBreach -= dt;
+      const maxActive = f > 0.82 ? 2 : 1;
+      if (this.nextBreach <= 0 && this.breaches.length < maxActive) {
+        const behind = [], any = [];
+        for (let i = 0; i < 12; i++) {
+          if (this.breaches.includes(i)) continue;
+          const a = (i + 0.5) * Math.PI / 6;
+          any.push(i); if (Math.abs(RT.angleDiff(a, p.a)) > 1.7) behind.push(i);
+        }
+        const i = RT.choice(behind.length && Math.random() < 0.75 ? behind : any);
+        this.breaches.push(i);
+        this.nextBreach = RT.lerp(7, 3.2, f) * RT.rand(0.8, 1.25);
+        const a = (i + 0.5) * Math.PI / 6;
+        RT.Audio.creak(RT.clamp(Math.sin(RT.angleDiff(a, p.a)), -1, 1));
+      }
+      // erosion
+      const rate = RT.lerp(0.17, 0.3, f);
+      for (const i of this.breaches) {
+        seg[i] -= rate * dt;
+        if (seg[i] <= 0) { seg[i] = 0; return this.die('breach'); }
+      }
+      // he stands at whichever gap he is working on
+      const target = this.breaches.length ? (this.breaches[0] + 0.5) * Math.PI / 6 : mm.angle + dt * 0.35;
+      mm.angle += RT.angleDiff(target, mm.angle) * Math.min(1, dt * 3);
+      const rr = this.breaches.length ? 1.15 : 1.5;
+      mm.x = c.x + Math.cos(mm.angle) * rr; mm.y = c.y + Math.sin(mm.angle) * rr;
+      if (!this.walkable(mm.x, mm.y)) { mm.x = c.x + Math.cos(mm.angle) * 0.95; mm.y = c.y + Math.sin(mm.angle) * 0.95; }
       mm.sprite.x = mm.x; mm.sprite.y = mm.y;
+      // mending
+      this.pouring = input.down('salt') && this.saltLeft > 0;
+      if (this.pouring) {
+        const i = this.segAt(p.a);
+        this.saltLeft = Math.max(0, this.saltLeft - dt * 0.012);      // spilling while you look for the gap
+        if (seg[i] < 1) {
+          const add = Math.min(1 - seg[i], dt * 0.75);
+          seg[i] += add; this.saltLeft = Math.max(0, this.saltLeft - add * 0.035);
+          if (seg[i] >= 1 && this.breaches.includes(i)) {
+            this.breaches = this.breaches.filter((b) => b !== i);
+            if (!this.flags.mended) { this.flags.mended = true; this.ui.say('Whole again. He moves on, looking for another gap.', 3); }
+          }
+        }
+        if (this.saltLeft <= 0) this.ui.say('The canister is empty.', 3);
+      }
+      // he blows the candle out now and then, to make the gaps harder to see
+      if (this.candleLit && Math.random() < dt * 0.04) { this.candleLit = false; this.smoke = 1; RT.Audio.blow(); this.ui.say('He blows your candle out.', 2); }
       if (RT.dist(p.x, p.y, c.x, c.y) > c.r - 0.1) this.die('circle');
     }
     startHalluc() {
@@ -756,9 +855,12 @@
         this.ui.setObjectives(steps);
         this.ui.setMarker(this, marker);
       } else {
-        this.ui.setMarker(this, null);
-        this.ui.setObjectives(null, this.phase === 'trapped' ? 'Stay inside the salt until 3:33 A.M.' : this.phase === 'halluc' ? '...' : 'Survive until 3:33 A.M.  Keep moving. Keep the flame.');
+        const goDown = this.flags.cellarOpen && !this.inCellar && this.phase === 'game';
+        this.ui.setMarker(this, goDown ? { x: 0.7, y: 15.5, label: `Cellar ${(RT.dist(this.player.x, this.player.y, 0.7, 15.5) * 1.5).toFixed(0)} m` } : null);
+        if (goDown) this.ui.setObjectives(null, 'Go down to the cellar (kitchen). NOW.');
+        else this.ui.setObjectives(null, this.phase === 'trapped' ? `Keep the circle whole until 3:33 A.M. Face a gap and hold [Q].  Salt ${Math.round(this.saltLeft * 100)}%` : this.phase === 'halluc' ? '...' : 'Survive until 3:33 A.M.  Keep moving. Keep the flame.');
       }
+      this.ui.setRing(this.phase === 'trapped' ? { seg: this.saltCircle.seg, facing: this.player.a, salt: this.saltLeft, breaches: this.breaches } : null);
       let alarm = null;
       if (this.candleOut) alarm = { text: `RELIGHT  [R]`, frac: 1 - this.candleOut.t / RELIGHT_WINDOW };
       else if (this.saltWin) alarm = { text: this.saltWin.pour > 0 ? 'POURING SALT...' : 'SALT  [HOLD Q]', frac: this.saltWin.pour > 0 ? this.saltWin.pour / SALT_POUR_TIME : 1 - this.saltWin.t / SALT_WINDOW, salt: true };
@@ -793,7 +895,7 @@
       if (this.prep.doorOpen) { cold = Math.max(cold, 0.5); whisper = Math.max(whisper, 0.25); }
       this.fx.cold += (cold - this.fx.cold) * Math.min(1, dt * 2);
       if (cold > 0.45 && !this.flags.coldMsg && this.phase === 'game') { this.flags.coldMsg = true; this.ui.say('The air turns cold. Your breath fogs. Move away.', 3.5); }
-      RT.Audio.update(dt, { drone: this.phase === 'prep' ? 0.18 : 0.35, wind: this.prep.doorOpen ? 0.35 : 0, whisper, whisperPan: pan, heart, salt: this.saltWin && this.saltWin.pour > 0 });
+      RT.Audio.update(dt, { drone: this.phase === 'prep' ? 0.18 : 0.35, wind: this.prep.doorOpen ? 0.35 : 0, whisper, whisperPan: pan, heart, salt: (this.saltWin && this.saltWin.pour > 0) || (this.phase === 'trapped' && this.pouring) });
     }
   }
 

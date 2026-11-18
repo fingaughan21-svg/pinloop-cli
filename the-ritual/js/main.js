@@ -53,21 +53,43 @@
       <li>Do not press a wrong floor on the way back. You will not get another chance.</li>
     </ul>`;
 
+  const RULES3 = RT.RULES3 || '';
+
+  const ACHIEVEMENTS = [
+    { id: 1, title: 'Until 3:33', desc: 'Win the Midnight Game.' },
+    { id: 2, title: 'Ground Floor', desc: 'Come back from the Other World.' },
+    { id: 3, title: 'Thank You for the Ride', desc: 'Complete the Hooded Man ritual.' },
+  ];
+
+  // Level unlocks and achievements, kept in this browser.
+  const Progress = {
+    data: { completed: {}, unlockAll: false },
+    load() { try { Object.assign(this.data, JSON.parse(localStorage.getItem('ritual.progress') || '{}')); } catch (e) {} },
+    save() { try { localStorage.setItem('ritual.progress', JSON.stringify(this.data)); } catch (e) {} },
+    unlocked(id) { return id === 1 || this.data.unlockAll || !!this.data.completed[id - 1]; },
+    complete(id) { const first = !this.data.completed[id]; this.data.completed[id] = true; this.save(); return first; },
+  };
+
   const LEVELS = [
-    { n: 'LEVEL 1', t: 'The Midnight Man', d: 'Let him in at midnight. Keep your candle lit until 3:33 a.m.', cls: 'Level1', rules: RULES1,
+    { id: 1, n: 'LEVEL 1', t: 'The Midnight Man', d: 'Let him in at midnight. Keep your candle lit until 3:33 a.m.', cls: 'Level1', rules: RULES1,
       intro: `<h2>LEVEL 1 &mdash; THE MIDNIGHT MAN</h2>
         <p>You found the instructions on an old forum thread, posted by an account that no longer exists. Everyone in the replies said it was nonsense.</p>
         <p>It is 11:59 p.m. The house is quiet. You are alone.</p>
         <p>Prepare the ritual exactly as written. Once he is inside, survive until <b>3:33 a.m.</b></p>
         <p class="dim">Each in-game hour lasts two real minutes. Read the rules with <b>J</b> at any time.</p>` },
-    { n: 'LEVEL 2', t: 'The Elevator', d: 'Ten floors, in the right order. Do not look at the woman who gets on at five.', cls: 'Level2', rules: RULES2,
+    { id: 2, n: 'LEVEL 2', t: 'The Elevator', d: 'Ten floors, in the right order. Do not look at the woman who gets on at five.', cls: 'Level2', rules: RULES2,
       intro: `<h2>LEVEL 2 &mdash; THE ELEVATOR</h2>
         <p>Hollis Tower has eleven storeys, one elevator, and a reputation. The building manager took the instructions down from the noticeboard twice.</p>
         <p>It is 2:14 a.m. The lobby is empty.</p>
         <p>Ride the floors in the right order, alone: <b>4, 2, 6, 2, 10</b>. Then <b>5</b>. Then <b>1</b>.</p>
         <p class="dim">Use the panel with <b>E</b>, then click a floor or type it (0 = 10). <b>C</b> closes the doors. Read the rules with <b>J</b>.</p>` },
-    { n: 'LEVEL 3', t: 'The Hooded Man', d: 'He stands at the foot of the bed. Do not let him see that you are awake.' },
-    { n: 'LEVEL 4', t: 'Three Kings', d: 'Two mirrors, three chairs, and a ritual that opens the Shadowside.' },
+    { id: 3, n: 'LEVEL 3', t: 'The Hooded Man', d: 'Call a cab that doesn\'t exist. Don\'t speak to the driver.', cls: 'Level3', rules: RULES3,
+      intro: `<h2>LEVEL 3 &mdash; THE HOODED MAN</h2>
+        <p>Your neighbour swears she did it in 1997. She came back. She doesn't talk about where the cab went.</p>
+        <p>It is 1:20 a.m. You have a rotary phone in the hall, two black cords somewhere in the house, and a printout with half of it underlined.</p>
+        <p>Prepare the house. Make the calls. Take the ride. <b>Come back.</b></p>
+        <p class="dim">Hold <b>SPACE</b> to close your eyes and breathe when your pulse climbs. <b>R</b> checks your watch. Read the rules with <b>J</b>; you will need them.</p>` },
+    { id: 4, n: 'LEVEL 4', t: 'Three Kings', d: 'Two mirrors, three chairs, and a ritual that opens the Shadowside.' },
   ];
 
   // ---------------- HUD ----------------
@@ -144,6 +166,52 @@
       const f = $('flash'); f.style.transition = 'none'; f.style.background = color; f.style.opacity = 1;
       requestAnimationFrame(() => requestAnimationFrame(() => { f.style.transition = 'opacity 0.8s ease-out'; f.style.opacity = 0; }));
     },
+    setRing(r) {
+      const el = $('ring');
+      if (!r) { el.classList.add('hidden'); return; }
+      el.classList.remove('hidden');
+      if (!this._segs) { this._segs = []; for (let i = 0; i < 12; i++) { const d = document.createElement('div'); d.className = 'sg'; el.appendChild(d); this._segs.push(d); } }
+      for (let i = 0; i < 12; i++) {
+        const a = (i + 0.5) * Math.PI / 6 - r.facing - Math.PI / 2;    // facing direction drawn at the top
+        const d = this._segs[i], v = r.seg[i];
+        d.style.transform = `translate(${Math.cos(a) * 48}px, ${Math.sin(a) * 48}px) rotate(${a + Math.PI / 2}rad)`;
+        d.style.opacity = (0.15 + v * 0.85).toFixed(2);
+        d.style.background = v < 1 ? `rgb(255,${Math.round(80 + v * 150)},${Math.round(60 + v * 120)})` : '#e8e8f0';
+        d.classList.toggle('hit', r.breaches.includes(i));
+      }
+      el.querySelector('.lbl').textContent = `SALT ${Math.round(r.salt * 100)}%`;
+    },
+    setPulse(v) {
+      const el = $('pulse');
+      if (v === null) { el.classList.add('hidden'); return; }
+      el.classList.remove('hidden'); el.classList.toggle('high', v > 130);
+      $('pulseN').textContent = Math.round(v);
+    },
+    setPhone(lvl) {
+      const el = $('phoneUI');
+      if (!lvl) { el.classList.add('hidden'); return; }
+      el.classList.remove('hidden');
+      const ph = lvl.ph;
+      $('phDisp').textContent = ph.dial || '\u00a0';
+      $('phHandset').textContent = ph.handsetUp ? 'Put the handset back' : (lvl.phase === 'after' ? 'Lift the handset and set it aside' : 'Lift the handset');
+      $('phStat').textContent = ph.status || '';
+      $('dial').style.transform = `rotate(${ph.spin || 0}deg)`;
+    },
+    choice(title, opts, cb) {
+      $('choiceT').textContent = title;
+      const box = $('choiceOpts'); box.innerHTML = '';
+      opts.forEach((o, i) => { const b = document.createElement('button'); b.textContent = o; b.addEventListener('click', (e) => { e.stopPropagation(); $('choiceUI').classList.add('hidden'); cb(i); }); box.appendChild(b); });
+      $('choiceUI').classList.remove('hidden');
+    },
+    hideChoice() { $('choiceUI').classList.add('hidden'); },
+    setBeat(b) {
+      const el = $('beat');
+      if (!b) { el.classList.add('hidden'); return; }
+      el.classList.remove('hidden');
+      const ph = (b.t % b.period) / b.period;
+      $('beatInner').style.transform = `scale(${(1 - ph) * 0.9 + 0.43})`;
+      $('beatNum').textContent = b.n;
+    },
     jumpscare(face, dur = 1.3) {
       const c = $('jump'), g = c.getContext('2d');
       g.imageSmoothingEnabled = false; g.clearRect(0, 0, 96, 96); g.drawImage(face, 0, 0);
@@ -156,13 +224,13 @@
     },
     reset() {
       this.msgT = 0; this.bigT = 0; this.jumpT = 0; $('msg').style.opacity = 0; $('big').classList.add('hidden'); $('jump').classList.add('hidden');
-      this.setAlarm(null); this.setOverlays({ cold: 0, drowsy: 0, dark: 0 }); this.setStamina(1, false); this.setSwing(null); this.setPanel(null);
+      this.setAlarm(null); this.setOverlays({ cold: 0, drowsy: 0, dark: 0 }); this.setStamina(1, false); this.setSwing(null); this.setPanel(null); this.setRing(null); this.setPulse(null); this.setPhone(null); this.hideChoice(); this.setBeat(null);
       $('marker').classList.add('hidden'); this.setPrompt('');
     },
   };
 
   // ---------------- Game ----------------
-  const SCREENS = ['menu', 'intro', 'nameDialog', 'journal', 'controls', 'settings', 'pause', 'ending'];
+  const SCREENS = ['menu', 'intro', 'nameDialog', 'journal', 'controls', 'settings', 'pause', 'ending', 'achievements'];
   const params = new URLSearchParams(location.search);
 
   const Game = {
@@ -172,7 +240,8 @@
       const inPlay = id === null;
       $('hud').classList.toggle('hidden', !(this.world && !this.world.attract && (inPlay || id === 'pause' || id === 'journal')));
       $('touch').classList.toggle('hidden', !inPlay);
-      if (!inPlay) $('panelUI').classList.add('hidden');
+      if (!inPlay) { $('panelUI').classList.add('hidden'); $('phoneUI').classList.add('hidden'); }
+      else if (this.world && this.world.phoneOpen) UI.setPhone(this.world);
       else if (this.world && this.world.panelOpen) UI.setPanel(this.world);
       this.current = id;
     },
@@ -181,6 +250,7 @@
       if (id === 'journalMenu') { $('journalBody').innerHTML = LEVELS.filter((l) => l.rules).map((l) => l.rules).join('<hr>'); id = 'journal'; }
       if (id === 'journal' && this.state !== 'menu') $('journalBody').innerHTML = this.level.rules;
       if (id === 'menu') { this.screenStack = []; return this.toMenu(); }
+      if (id === 'achievements') this.renderAchievements();
       this.screenStack.push(this.current);
       this.show(id);
     },
@@ -192,24 +262,23 @@
       RT.Input.init(this.canvas);
       window.addEventListener('resize', () => this.renderer.resize());
 
-      const lv = $('levels');
-      LEVELS.forEach((L) => {
-        const b = document.createElement('div');
-        b.className = 'lvl' + (L.cls ? '' : ' locked');
-        b.innerHTML = `<div class="n">${L.n}</div><div class="t">${L.t}</div><div class="d">${L.d}</div>${L.cls ? '' : '<div class="lock">&#128274;</div>'}`;
-        b.addEventListener('click', () => {
-          RT.Audio.init();
-          if (L.cls) { this.level = L; $('introBody').innerHTML = L.intro; this.go('intro'); }
-          else { RT.Audio.knock(0.3); b.animate([{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'none' }], 200); }
-        });
-        lv.appendChild(b);
-      });
+      this.renderLevels();
       // elevator panel buttons
       const pg = $('pgrid');
       for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) { const b = document.createElement('button'); b.textContent = n; b.dataset.p = n; pg.appendChild(b); }
       for (const b of document.querySelectorAll('#panelUI [data-p]')) {
         b.addEventListener('click', (e) => { e.stopPropagation(); const v = b.dataset.p; if (this.world && this.world.panelAction) this.world.panelAction(isNaN(+v) ? v : +v); });
       }
+      // rotary dial: 1-9 then 0 around the wheel
+      const dial = $('dial');
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].forEach((d, i) => {
+        const b = document.createElement('button'); b.textContent = d;
+        const ang = -Math.PI * 0.35 - i * (Math.PI * 1.45 / 9);
+        b.style.left = (100 + Math.cos(ang) * 74) + 'px'; b.style.top = (100 + Math.sin(ang) * 74) + 'px';
+        b.addEventListener('click', (e) => { e.stopPropagation(); if (this.world && this.world.phoneAction) this.world.phoneAction('d' + d); });
+        dial.appendChild(b);
+      });
+      for (const b of document.querySelectorAll('#phoneUI [data-ph]')) b.addEventListener('click', (e) => { e.stopPropagation(); if (this.world && this.world.phoneAction) this.world.phoneAction(b.dataset.ph); });
       document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { RT.Audio.init(); this.go(b.dataset.go); }));
       $('begin').addEventListener('click', () => this.startLevel());
       $('journalClose').addEventListener('click', () => this.closeOverlay());
@@ -222,7 +291,12 @@
       $('nameOk').addEventListener('click', () => this.submitName());
       $('nameCancel').addEventListener('click', () => { this.nameCb = null; this.resume(); });
       for (const id of ['nFirst', 'nMiddle', 'nLast']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') this.submitName(); e.stopPropagation(); });
+      $('pwGo').addEventListener('click', () => this.tryPassword());
+      $('pw').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') this.tryPassword(); });
+      $('resetProgress').addEventListener('click', () => { Progress.data = { completed: {}, unlockAll: false }; Progress.save(); this.renderLevels(); $('pwMsg').textContent = 'Progress reset.'; });
       this.load();
+      Progress.load();
+      this.renderLevels();
 
       this.toMenu();
       let last = performance.now();
@@ -233,6 +307,40 @@
       };
       requestAnimationFrame(frame);
     },
+    renderLevels() {
+      const lv = $('levels'); lv.innerHTML = '';
+      LEVELS.forEach((L) => {
+        const playable = !!L.cls, open = playable && Progress.unlocked(L.id), done = Progress.data.completed[L.id];
+        const b = document.createElement('div');
+        b.className = 'lvl' + (open ? '' : ' locked') + (playable ? '' : ' soon');
+        const badge = open ? (done ? '<div class="lock" title="Completed">&#10022;</div>' : '') : '<div class="lock">&#128274;</div>';
+        b.innerHTML = `<div class="n">${L.n}</div><div class="t">${L.t}</div><div class="d">${open || !playable ? L.d : `Complete Level ${L.id - 1} to unlock.`}</div>${badge}`;
+        b.addEventListener('click', () => {
+          RT.Audio.init();
+          if (open) { this.level = L; $('introBody').innerHTML = L.intro; this.go('intro'); }
+          else {
+            RT.Audio.knock(0.3); b.animate([{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'none' }], 200);
+            this.toast(playable ? `Complete <b>Level ${L.id - 1}</b> to unlock this.` : 'Not in this demo.');
+          }
+        });
+        lv.appendChild(b);
+      });
+    },
+    renderAchievements() {
+      $('achList').innerHTML = ACHIEVEMENTS.map((a) => {
+        const got = Progress.data.completed[a.id];
+        return `<div class="ach ${got ? 'got' : ''}"><div class="ico">${got ? '&#10022;' : '?'}</div><div><div class="t">${got ? a.title : '???'}</div><div class="d">${a.desc}</div></div></div>`;
+      }).join('');
+    },
+    tryPassword() {
+      const v = $('pw').value.trim(); $('pw').value = '';
+      if (v === 'admin123') { Progress.data.unlockAll = true; Progress.save(); this.renderLevels(); $('pwMsg').textContent = 'All levels unlocked.'; RT.Audio.ding && RT.Audio.ding(1); }
+      else { $('pwMsg').textContent = 'Nothing happens.'; RT.Audio.knock(0.3); }
+    },
+    toast(html, dur = 3500) {
+      const t = $('toast'); t.innerHTML = html; t.classList.remove('hidden');
+      clearTimeout(this._toastT); this._toastT = setTimeout(() => t.classList.add('hidden'), dur);
+    },
     save() { try { localStorage.setItem('ritual.settings', JSON.stringify({ sens: RT.Input.sensitivity, vol: RT.Audio.volume })); } catch (e) {} },
     load() {
       try {
@@ -242,14 +350,14 @@
       } catch (e) {}
     },
 
-    stopLevelAudio() { RT.Audio.music && RT.Audio.music(false); RT.Audio.setHum && RT.Audio.setHum(0); },
+    stopLevelAudio() { RT.Audio.music && RT.Audio.music(false); RT.Audio.setHum && RT.Audio.setHum(0); RT.Audio.setRain && RT.Audio.setRain(0); RT.Audio.setEngine && RT.Audio.setEngine(0); },
     toMenu() {
       this.keepUnlocked = false;
       if (document.pointerLockElement) document.exitPointerLock();
       this.state = 'menu';
       this.stopLevelAudio();
       UI.reset();
-      document.body.classList.remove('lvl2');
+
       // attract mode: the dark living room by candlelight behind the menu
       const w = new RT.Level1(this, { attract: true });
       w.attract = true;
@@ -267,7 +375,7 @@
       this.stopLevelAudio();
       this.keepUnlocked = false;
       this.world = new RT[this.level.cls](this, { speed: +params.get('speed') || 1 });
-      document.body.classList.toggle('lvl2', this.level.cls === 'Level2');
+      for (const b of document.querySelectorAll('.tbtn[data-lv]')) b.style.display = b.dataset.lv.split(' ').includes(String(this.level.id)) ? '' : 'none';
       $('journalBody').innerHTML = this.level.rules;
       if (params.has('skip') && this.world.skipPrep) this.world.skipPrep();
       this.state = 'play';
@@ -323,7 +431,15 @@
       $('endNext').innerHTML = e.next || '';
       setTimeout(() => this.show('ending'), kind === 'dead' ? 0 : 400);
       this.stopLevelAudio();
-      if (e.win) RT.Audio.chime(1);
+      if (e.win) {
+        RT.Audio.chime(1);
+        const first = Progress.complete(this.level.id);
+        const a = ACHIEVEMENTS.find((x) => x.id === this.level.id);
+        if (first && a) setTimeout(() => this.toast(`Achievement unlocked: <b>${a.title}</b>`, 5000), 900);
+        const nxt = LEVELS.find((x) => x.id === this.level.id + 1);
+        if (nxt && nxt.cls) $('endNext').innerHTML = `Unlocked: <b>${nxt.n} &mdash; ${nxt.t}</b>`;
+        this.renderLevels();
+      }
     },
 
     frame(dt, t) {

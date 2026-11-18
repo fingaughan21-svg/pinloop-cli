@@ -27,6 +27,8 @@
     <div id="msg"></div>
     <div id="inv"></div>
     <div id="crosshair"></div>
+    <div id="pulse" class="hidden">&#9829; <span id="pulseN">72</span> <small>BPM</small></div>
+    <div id="ring" class="hidden"><div class="me"></div><div class="lbl">SALT</div></div>
     <div id="stamina" class="hidden"><div id="staminaFill"></div><span>BREATH</span></div>
     <div id="marker" class="hidden"><div class="dia"></div><span></span></div>
     <div id="swing" class="hidden">
@@ -41,17 +43,37 @@
     <div class="prow"><button data-p="open">&#9664;&#9654;</button><button data-p="close">&#9654;&#9664;</button></div>
     <button class="pback" data-p="back">Step back [E]</button>
   </div>
+  <div id="phoneUI" class="hidden">
+    <div class="phdisp" id="phDisp">&nbsp;</div>
+    <div class="dial" id="dial"><div class="hub">&#9742;</div></div>
+    <div class="phbtns">
+      <button data-ph="count">Count to thirteen</button>
+      <button data-ph="handset" id="phHandset">Lift the handset</button>
+      <button data-ph="tie">Tie a black cord to the handset</button>
+      <button data-ph="swap">Swap the cords</button>
+      <button data-ph="remove">Remove the cord</button>
+      <button data-ph="speak">Speak into the phone</button>
+      <button data-ph="back">Stand up [E]</button>
+    </div>
+    <div class="phstat" id="phStat"></div>
+  </div>
+  <div id="choiceUI" class="hidden"><div class="ct" id="choiceT"></div><div id="choiceOpts"></div></div>
+  <div id="beat" class="hidden"><div class="ring"></div><div class="inner" id="beatInner"></div><div class="num" id="beatNum">0</div><div class="lbl">Press [E] as the rings meet</div></div>
   <canvas id="jump" class="hidden" width="96" height="96"></canvas>
+  <div id="toast" class="hidden"></div>
 
   <div id="touch" class="hidden">
     <div id="stick"><div id="knob"></div></div>
     <div class="tbtns right">
       <button class="tbtn big" data-act="interact">USE</button>
-      <button class="tbtn" data-act="relight">RELIGHT</button>
-      <button class="tbtn" data-act="salt">SALT</button>
-      <button class="tbtn" data-act="wait">WAIT</button>
-      <button class="tbtn" data-act="flashlight">TORCH</button>
-      <button class="tbtn l2only" data-act="talk">TALK</button>
+      <button class="tbtn" data-lv="1" data-act="relight">RELIGHT</button>
+      <button class="tbtn" data-lv="1" data-act="salt">SALT</button>
+      <button class="tbtn" data-lv="1" data-act="wait">WAIT</button>
+      <button class="tbtn" data-lv="1 2" data-act="flashlight">TORCH</button>
+      <button class="tbtn" data-lv="2 3" data-act="talk">TALK</button>
+      <button class="tbtn" data-lv="3" data-act="wait">BREATHE</button>
+      <button class="tbtn" data-lv="3" data-act="relight">WATCH</button>
+      <button class="tbtn" data-lv="3" data-act="salt">WHISPER</button>
     </div>
     <div class="tbtns top">
       <button class="tbtn small" data-act="journal">RULES</button>
@@ -66,6 +88,7 @@
     <div id="levels"></div>
     <div class="row">
       <button data-go="journalMenu">The Rules</button>
+      <button data-go="achievements">Achievements</button>
       <button data-go="settings">Settings</button>
       <button data-go="controls">Controls</button>
     </div>
@@ -130,6 +153,19 @@
       <h2>Settings</h2>
       <label>Look sensitivity <input type="range" id="sens" min="0.3" max="2.5" step="0.1" value="1"></label>
       <label>Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+      <h3>Password</h3>
+      <div class="pwrow"><input id="pw" type="password" placeholder="Enter password" autocomplete="off"><button id="pwGo">Enter</button></div>
+      <div id="pwMsg" class="dim"></div>
+      <div class="row"><button id="resetProgress">Reset progress</button></div>
+      <div class="row"><button data-go="back" class="primary">Back</button></div>
+    </div>
+  </div>
+
+  <!-- Achievements -->
+  <div id="achievements" class="screen hidden">
+    <div class="panel narrow">
+      <h2>Achievements</h2>
+      <div id="achList"></div>
       <div class="row"><button data-go="back" class="primary">Back</button></div>
     </div>
   </div>
@@ -164,6 +200,7 @@
 <script src="js/util.js"></script>
 <script src="js/textures.js"></script>
 <script src="js/textures2.js"></script>
+<script src="js/textures3.js"></script>
 <script src="js/map.js"></script>
 <script src="js/renderer.js"></script>
 <script src="js/audio.js"></script>
@@ -171,6 +208,7 @@
 <script src="js/common.js"></script>
 <script src="js/level1.js"></script>
 <script src="js/level2.js"></script>
+<script src="js/level3.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
