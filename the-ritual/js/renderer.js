@@ -30,7 +30,8 @@
 
     // Light at a world point -> [r,g,b] multipliers (0..~1.4), quantised for that banded DOOM look.
     light(world, wx, wy, room, out) {
-      let r = world.ambient * 0.6, g = world.ambient * 0.68, b = world.ambient;
+      const tint = world.ambientTint;
+      let r = world.ambient * (tint ? tint[0] : 0.6), g = world.ambient * (tint ? tint[1] : 0.68), b = world.ambient * (tint ? tint[2] : 1);
       if (room && world.roomLit[room]) { r += 1.0; g += 0.94; b += 0.82; }
       const L = world.lights;
       for (let i = 0; i < L.length; i++) {
@@ -78,7 +79,7 @@
           if (cell !== lastCell) {
             lastCell = cell;
             room = map.roomAt(cx, cy);
-            tex = isFloor ? (T.floors[room] || T.floors.c) : T.ceiling;
+            tex = isFloor ? (T.floors[room] || T.floors.c) : ((T.ceilings && T.ceilings[room]) || T.ceiling);
             this.light(world, cx + 0.5, cy + 0.5, room, L);
           }
           // per-pixel candle falloff (cheap: only distance term recomputed every 4 px)
@@ -106,10 +107,19 @@
         let sx, sy, sdx, sdy;
         if (rdx < 0) { sx = -1; sdx = (p.x - mx) * ddx; } else { sx = 1; sdx = (mx + 1 - p.x) * ddx; }
         if (rdy < 0) { sy = -1; sdy = (p.y - my) * ddy; } else { sy = 1; sdy = (my + 1 - p.y) * ddy; }
-        let side = 0, hit = false, guard = 0;
+        let side = 0, hit = false, guard = 0, door = -1;
         while (!hit && guard++ < 64) {
           if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
-          if (map.isWall(mx, my)) hit = true;
+          if (map.isWall(mx, my)) {
+            door = map.doorAt ? map.doorAt(mx, my) : -1;
+            if (door > 0) {
+              // sliding double door: rays through the open gap keep going
+              const pd = side === 0 ? sdx - ddx : sdy - ddy;
+              let wx = side === 0 ? p.y + pd * rdy : p.x + pd * rdx; wx -= Math.floor(wx);
+              if (Math.abs(wx - 0.5) < door / 2) continue;
+            }
+            hit = true;
+          }
         }
         const perp = side === 0 ? sdx - ddx : sdy - ddy;
         zbuf[x] = perp;
@@ -119,14 +129,19 @@
         const frontX = side === 0 ? mx - sx : mx, frontY = side === 1 ? my - sy : my;
         const room = map.roomAt(frontX, frontY);
         const wtex = T.walls[room] || T.walls.c;
-        const decal = map.decalAt(mx, my, face);
+        let decal = door >= 0 ? null : map.decalAt(mx, my, face);
         let tx = (wallX * 64) | 0;
         if ((side === 0 && rdx < 0) || (side === 1 && rdy > 0)) tx = 63 - tx;
+        if (door >= 0) {
+          const u = wallX < 0.5 ? wallX + door / 2 : wallX - door / 2;
+          tx = RT.clamp((u * 64) | 0, 0, 63);
+          decal = { door: true };
+        }
         const hx = p.x + perp * rdx, hy = p.y + perp * rdy;
         this.light(world, hx - (side === 0 ? sx : 0) * 0.02, hy - (side === 1 ? sy : 0) * 0.02, room, L);
         if (side === 1) { L[0] *= 0.82; L[1] *= 0.82; L[2] *= 0.82; }
         let dtex = null, emissive = 0;
-        if (decal) { dtex = world.decalTex(decal); emissive = decal.emissive || 0; }
+        if (decal) { dtex = decal.door ? T.liftDoor : world.decalTex(decal); emissive = decal.emissive || 0; }
         const lr = Math.max(L[0], emissive * 0.7), lg = Math.max(L[1], emissive * 0.8), lb = Math.max(L[2], emissive);
         const lineH = H / perp;
         const top = horizon - lineH / 2;
@@ -156,7 +171,7 @@
         const tX = inv * (dirY * rx - dirX * ry);
         const tY = inv * (-planeY * rx + planeX * ry);
         if (tY <= 0.08) continue;
-        const scrX = (W / 2) * (1 + tX / tY);
+        const scrX = (W / 2) * (1 + tX / tY) + (s.shake ? (Math.random() - 0.5) * s.shake : 0);
         const hgt = s.h * H / tY;
         const wid = hgt * tex.w / tex.h;
         const bottom = horizon + (0.5 - (s.z || 0)) * H / tY;
@@ -178,7 +193,12 @@
             if (ty < 0 || ty >= tex.h) continue;
             const c = tex.data[ty * tex.w + tx];
             if (!(c >>> 24)) continue;
-            if (s.black) { buf[y * W + x] = 0xff040305; continue; }
+            if (s.black) {
+              // pure black body; only the palest details (eyes, teeth) show, dimly
+              const lum = c & 255;
+              buf[y * W + x] = lum > 90 ? (0xff000000 | (((lum * 0.55) | 0) * 0x010101)) : 0xff040305;
+              continue;
+            }
             const r = (c & 255) * lr, g = ((c >> 8) & 255) * lg, b = ((c >> 16) & 255) * lb;
             buf[y * W + x] = 0xff000000 | ((b > 255 ? 255 : b) << 16) | ((g > 255 ? 255 : g) << 8) | (r > 255 ? 255 : r);
           }
@@ -222,9 +242,24 @@
       }
     }
 
+    // world (x,y,z) -> CSS pixel position on screen, for HUD markers
+    project(world, x, y, z = 0.5) {
+      const p = world.player, dirX = Math.cos(p.a), dirY = Math.sin(p.a);
+      const planeX = -dirY * 0.68, planeY = dirX * 0.68;
+      const inv = 1 / (planeX * dirY - dirX * planeY);
+      const rx = x - p.x, ry = y - p.y;
+      const tX = inv * (dirY * rx - dirX * ry), tY = inv * (-planeY * rx + planeX * ry);
+      const rect = this.canvas.getBoundingClientRect();
+      const k = rect.width / this.W;
+      if (tY <= 0.1) return { behind: true, side: tX > 0 ? 1 : -1, rect };
+      const sx = (this.W / 2) * (1 + tX / tY), sy = this.H / 2 + (0.5 - z) * this.H / tY;
+      return { x: rect.left + sx * k, y: rect.top + sy * k, behind: false, side: sx < 0 ? -1 : sx > this.W ? 1 : 0, rect };
+    }
+
     drawViewModel(world, t) {
       const p = world.player, ctx = this.ctx, H = this.H, W = this.W;
       ctx.imageSmoothingEnabled = false;
+      if (world.drawViewModel) return world.drawViewModel(ctx, W, H, t);
       const vm = world.viewModel;
       if (!vm.candle) return;
       const sway = Math.sin(p.walkPhase * 0.5) * 3, bob = Math.abs(Math.cos(p.walkPhase * 0.5)) * 3;

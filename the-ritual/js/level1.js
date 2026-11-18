@@ -1,9 +1,9 @@
 // LEVEL 1 - THE MIDNIGHT MAN
 // Pre-ritual (untimed) -> 12:00 a.m. -> survive to 3:33 a.m.
-// One in-game hour = 5 real minutes (one in-game minute = 5 seconds).
+// One in-game minute = 2 real seconds (one hour = 2 minutes; a full night is ~7 minutes).
 (function (RT) {
   const M = RT.Map;
-  const SECONDS_PER_GAME_MINUTE = 5;
+  const SECONDS_PER_GAME_MINUTE = 2;
   const END_MINUTE = 3 * 60 + 33;
   const RELIGHT_WINDOW = 10;     // rules: relight within ten seconds
   const SALT_WINDOW = 5;         // "immediately" surround yourself with salt
@@ -76,10 +76,11 @@
       } };
       this.sprites.push(this.offering);
       this.mm = { x: 11.5, y: 16, state: 'gone', timer: 40, speed: 0.9, field: null, fieldTarget: -1, fieldT: 0, goal: null, nextVisit: 75, sprite: null, angle: 0 };
-      this.mm.sprite = { x: 0, y: 0, h: 1.08, z: 0, black: true, hidden: true, getTex: (t) => {
+      this.mm.sprite = { x: 0, y: 0, h: 1.15, z: 0, black: true, hidden: true, shake: 0, getTex: (t) => {
         const d = RT.dist(this.mm.x, this.mm.y, this.player.x, this.player.y);
-        if (this.mm.state === 'close' && d < 1.6) return RT.Tex.mm[2];
-        return RT.Tex.mm[((t * 1.3) | 0) % 2];
+        if ((this.mm.state === 'close' && d < 2.2) || this.phase === 'dead') return RT.Tex.mm[2];
+        // twitchy, irregular head movement
+        return RT.Tex.mm[(Math.sin(t * 2.3) + Math.sin(t * 7.1) * 0.6 > 0.9) ? 1 : 0];
       } };
       this.sprites.push(this.mm.sprite);
       this.phantoms = [];
@@ -112,6 +113,10 @@
 
     // ---------- helpers ----------
     walkable(x, y) { return !this.map.isWall(x | 0, y | 0); }
+    blocked(cx, cy) { return this.map.isWall(cx, cy); }
+    get solids() { return this.props; }
+    // 0 at midnight -> 1 at 3:33; everything gets nastier smoothly
+    diff() { return this.phase === 'prep' ? 0 : RT.clamp(this.minutes / END_MINUTE, 0, 1); }
     lightsOnCount() { return ROOMS.filter((r) => this.roomLit[r]).length; }
     los(ax, ay, bx, by) {
       const d = RT.dist(ax, ay, bx, by), n = Math.ceil(d / 0.1);
@@ -145,16 +150,20 @@
       const p = this.player;
       if (this.phase === 'dead' || this.phase === 'over') return;
 
-      this.updatePlayer(dt, input);
+      RT.movePlayer(this, dt, input, { frozen: !!this.swing || (this.saltWin && input.down('salt')) });
       this.updateStrike(dt);
+      if (this.swing) this.swing.update(dt, input);
       if (this.smoke > 0) this.smoke = Math.max(0, this.smoke - dt * 0.4);
       if (this.prep.knockCD > 0) this.prep.knockCD -= dt;
 
       // actions
       const target = this.findTarget();
       this.ui.setPrompt(target ? target.label : '');
-      if (input.take('interact') && target) target.act();
-      if (input.take('relight')) this.tryRelight();
+      if (!this.swing) {
+        if (input.take('interact') && target) target.act();
+        else if (target && target.repeat && input.down('interact') && this.prep.knockCD <= 0) target.act();
+        if (input.take('relight')) this.tryRelight();
+      }
       if (input.take('flashlight')) this.useFlashlight();
       if (input.take('salt') && !this.saltWin && this.phase === 'game') this.ui.say(this.candleOut ? 'Relight the candle first. Salt is the last resort.' : 'Salt is only for when the candle cannot be relit.', 2.5);
 
@@ -175,40 +184,6 @@
 
       this.updateHud();
       this.updateAudio(dt);
-    }
-
-    updatePlayer(dt, input) {
-      const p = this.player;
-      p.a += input.consumeLook() + ((input.down('turnR') ? 1 : 0) - (input.down('turnL') ? 1 : 0)) * 2.4 * dt;
-      let fwd = (input.down('fwd') ? 1 : 0) - (input.down('back') ? 1 : 0) + input.moveY;
-      let str = (input.down('right') ? 1 : 0) - (input.down('left') ? 1 : 0) + input.moveX;
-      const m = Math.hypot(fwd, str); if (m > 1) { fwd /= m; str /= m; }
-      const pouring = this.saltWin && input.down('salt');
-      const sprint = input.down('sprint') && fwd > 0.3;
-      const speed = pouring ? 0 : (sprint ? 3.3 : 2.0);
-      this.sprinting = sprint && m > 0.1;
-      const ca = Math.cos(p.a), sa = Math.sin(p.a);
-      const vx = (ca * fwd - sa * str) * speed * dt, vy = (sa * fwd + ca * str) * speed * dt;
-      this.move(vx, vy);
-      const moved = Math.hypot(vx, vy);
-      p.walkPhase += moved * 4.2;
-      p.bob = Math.round(Math.sin(p.walkPhase) * 1.5);
-      p.stepAcc += moved;
-      if (p.stepAcc > (sprint ? 0.85 : 0.65)) { p.stepAcc = 0; RT.Audio.step(); }
-    }
-    move(vx, vy) {
-      const p = this.player, r = 0.22;
-      const free = (x, y) => !this.map.isWall((x - r) | 0, (y - r) | 0) && !this.map.isWall((x + r) | 0, (y - r) | 0) && !this.map.isWall((x - r) | 0, (y + r) | 0) && !this.map.isWall((x + r) | 0, (y + r) | 0);
-      if (free(p.x + vx, p.y)) p.x += vx;
-      if (free(p.x, p.y + vy)) p.y += vy;
-      for (const s of this.props) {
-        if (!s.solid) continue;
-        const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy), min = s.solid + r * 0.6;
-        if (d < min && d > 0.0001) {
-          const nx = s.x + dx / d * min, ny = s.y + dy / d * min;
-          if (free(nx, p.y)) p.x = nx; if (free(p.x, ny)) p.y = ny;
-        }
-      }
     }
 
     // ---------- interaction ----------
@@ -274,13 +249,13 @@
       if (pr.offering === 1 && !pr.blown) {
         return { label: '[E] Light the candle', act: () => {
           if (this.inv.matches <= 0) return this.ui.say(this.inv.lighter ? 'Not the lighter. Matches. It must be done properly.' : 'You need matches.', 3);
-          this.startStrike(1, () => { pr.offering = 2; this.ui.say('Knock on the door. Twenty-two times.', 4); });
+          this.beginSwing(() => { pr.offering = 2; this.ui.say('Knock on the door. Twenty-two times.', 4); });
         } };
       }
       if (pr.offering === 2 && pr.knocks < 22) {
-        return { label: `[E] Knock  (${pr.knocks}/22)`, act: () => {
+        return { label: `[E] Knock  (${pr.knocks}/22)  — hold to keep knocking`, repeat: true, act: () => {
           if (pr.knockCD > 0) return;
-          pr.knockCD = 0.35; pr.knocks++; RT.Audio.knock(0.6 + pr.knocks / 40);
+          pr.knockCD = 0.16; pr.knocks++; RT.Audio.knock(0.6 + pr.knocks / 40);
           if (pr.knocks === 22) {
             this.ui.setClock('12:00 A.M.');
             this.ui.bigText('12:00 A.M.', 3);
@@ -353,6 +328,41 @@
       return { label: '[E] Take the paper', act: () => { pr.paperTaken = true; s.taken = true; this.inv.paper = true; RT.Audio.pickup(); this.ui.say('Your name, in ink and blood.', 2.5); } };
     }
 
+    propOf(item, name) {
+      const s = this.props.find((q) => q.item === item);
+      if (!s) return null;
+      return { x: s.x, y: s.y, name: name || (s.special === 'desk' ? 'Study desk' : item) };
+    }
+    nearestSwitch() {
+      const p = this.player; let best = null, bd = 1e9;
+      for (const d of RT.Map.DECALS) {
+        if (d.kind !== 'switch' || !this.roomLit[d.room]) continue;
+        const o = { N: [0.5, -0.05], S: [0.5, 1.05], E: [1.05, 0.5], W: [-0.05, 0.5] }[d.f];
+        const x = d.x + o[0], y = d.y + o[1], dd = RT.dist(x, y, p.x, p.y);
+        if (dd < bd) { bd = dd; best = { x, y, name: RT.Map.ROOM_NAMES[d.room] + ' light' }; }
+      }
+      return best;
+    }
+
+    // ending copy for the shared ending screen
+    ending(kind, reason) {
+      const name = (this.prep.name || 'You').split(' ')[0];
+      const DEATHS = {
+        light: ['YOU TURNED ON A LIGHT', 'The rules were simple. In the sudden glare he was already standing beside you.'],
+        flashlight: ['YOU USED A FLASHLIGHT', 'The beam found him at the end of the corridor. Then it found nothing at all.'],
+        sleep: ['YOU FELL ASLEEP', 'You only closed your eyes for a moment. You never opened them again.'],
+        provoke: ['YOU PROVOKED HIM', 'You reached out to it. It reached back.'],
+        caught: ['HE FOUND YOU', 'Cold fingers in the dark. The Midnight Man does not lose his own game.'],
+        circle: ['YOU LEFT THE CIRCLE', 'One step past the salt. He had been waiting for it.'],
+      };
+      const stats = this.phase === 'dead' && this.minutes === 0 ? '' : `Clock: ${RT.fmtClock(Math.min(this.minutes, END_MINUTE))}  ·  Matches left: ${this.inv.matches}`;
+      if (kind === 'win') return { win: true, title: '3:33 A.M.', text: `The cold lifts. The whispering stops. The Midnight Man leaves your house, and the sky outside begins to grey. ${name}, you won the Midnight Game.`, stats, next: 'Next: <b>Level 2 &mdash; The Elevator</b>' };
+      if (kind === 'trapped') return { title: 'SURVIVED. NOT WON.', text: 'You spent the rest of the night inside the salt while it circled you, whispering your name. At 3:33 it was gone. But you did not win the game, and it knows where you live.', stats };
+      if (kind === 'lost') return { title: 'YOUR GREATEST FEAR', text: 'It held you until 3:33. When morning came you were still sitting in the dark, and you have not been able to sleep with the lights off since.', stats };
+      const [title, text] = DEATHS[reason] || ['YOU DID NOT SURVIVE', ''];
+      return { title, text, stats };
+    }
+
     mmAction() {
       const d = RT.dist(this.mm.x, this.mm.y, this.player.x, this.player.y);
       if (d > 3) return null;
@@ -360,17 +370,21 @@
     }
 
     // ---------- candle ----------
-    startStrike(ok, done) {
-      if (this.strike) return;
-      this.inv.matches--;
-      let chance = ok;
-      if (this.phase === 'game') {
-        const d = RT.dist(this.mm.x, this.mm.y, this.player.x, this.player.y);
-        chance = this.mm.state === 'gone' ? 0.9 : d < 2 ? 0.55 : 0.75;
-      }
-      const success = Math.random() < chance;
-      this.strike = { t: 0, success, done, flame: false };
-      RT.Audio.strike(success);
+    // Strike a match: a timing meter. The zone shrinks and the marker speeds
+    // up as the night goes on, and again when he is close.
+    beginSwing(done) {
+      if (this.strike || this.swing) return;
+      const f = this.diff();
+      const near = this.phase === 'game' && !this.mm.sprite.hidden && RT.dist(this.mm.x, this.mm.y, this.player.x, this.player.y) < 2.5;
+      const zone = this.phase === 'prep' ? 0.3 : RT.lerp(0.24, 0.12, f) * (near ? 0.75 : 1);
+      const speed = this.phase === 'prep' ? 0.9 : RT.lerp(1.1, 2.0, f) * (near ? 1.2 : 1);
+      this.ui.say('Strike the match: press [E] or [R] in the marked zone.', 2.5);
+      this.swing = new RT.SwingMeter(this.ui, { zone, speed, timeout: 3.2, onDone: (ok, timedOut) => {
+        this.swing = null;
+        this.inv.matches--;
+        this.strike = { t: 0, success: ok, done, flame: false, timedOut };
+        RT.Audio.strike(ok);
+      } });
     }
     updateStrike(dt) {
       const s = this.strike; if (!s) return;
@@ -379,11 +393,11 @@
       if (s.t > 1.0) {
         this.strike = null;
         if (s.success) s.done && s.done();
-        else this.ui.say('The match sputters and dies.', 1.5);
+        else this.ui.say(s.timedOut ? 'Your hands shake too much. The match snaps.' : RT.choice(['The match sputters and dies.', 'The head crumbles off the match.', 'Too hard. The match snaps.']), 1.8);
       }
     }
     tryRelight() {
-      if (this.strike) return;
+      if (this.strike || this.swing) return;
       if (this.phase === 'halluc' || this.phase === 'dead') return;
       if (!this.inv.candle) return this.ui.say(this.prep.offering >= 1 ? 'The candle is at the door.' : 'You have no candle.', 2);
       if (this.candleLit) return;
@@ -395,7 +409,7 @@
         }
         return this.ui.say('You are out of matches.', 2.5);
       }
-      this.startStrike(0.9, () => {
+      this.beginSwing(() => {
         this.candleLit = true;
         if (this.phase === 'prep' && this.prep.closed) this.startGame();
         else if (this.phase === 'game' && this.candleOut) this.onRelit();
@@ -439,7 +453,7 @@
       this.ui.setClock(RT.fmtClock(0));
       this.ui.bigText('THE MIDNIGHT GAME', 3.5, 'Survive until 3:33 A.M.');
       RT.Audio.stinger();
-      this.mm.state = 'gone'; this.mm.timer = 35; this.mm.nextVisit = RT.rand(70, 100);
+      this.mm.state = 'gone'; this.mm.timer = 20; this.mm.nextVisit = RT.rand(40, 55);
       this.positions = [];
       this.game.input.lastInput = performance.now();
     }
@@ -478,8 +492,9 @@
       this.posTimer += dt;
       if (this.posTimer > 1) {
         this.posTimer = 0; this.positions.push([p.x, p.y]);
-        if (this.positions.length > 25) this.positions.shift();
-        if (this.positions.length === 25 && this.positions.every(([x, y]) => RT.dist(x, y, p.x, p.y) < 1.8)) {
+        const lim = this.stillLimit();
+        while (this.positions.length > lim) this.positions.shift();
+        if (this.positions.length >= lim && this.positions.every(([x, y]) => RT.dist(x, y, p.x, p.y) < 1.8)) {
           this.positions = [];
           if (!this.flags.stillWarn) { this.flags.stillWarn = true; this.ui.say('You have stayed in one place too long.', 3); }
           this.mmFind();
@@ -545,8 +560,10 @@
       mm.state = 'retreat'; mm.timer = 2.5;
       mm.nextVisit = this.visitDelay();
     }
-    visitDelay() { return [RT.rand(70, 100), RT.rand(55, 80), RT.rand(42, 62), RT.rand(32, 48)][this.hour()]; }
-    huntSpeed() { return [1.3, 1.5, 1.7, 1.85][this.hour()]; }
+    visitDelay() { const f = this.diff(); return RT.lerp(52, 20, f) * RT.rand(0.8, 1.25); }
+    huntSpeed() { return RT.lerp(1.25, 2.0, this.diff()); }
+    blowRadius() { return RT.lerp(2.5, 3.6, this.diff()); }
+    stillLimit() { return Math.round(RT.lerp(22, 12, this.diff())); }
 
     stepToward(gx, gy, speed, dt) {
       const mm = this.mm, W = M.W;
@@ -593,8 +610,8 @@
           break;
         case 'wander': {
           if (!mm.goal || RT.dist(mm.x, mm.y, mm.goal[0], mm.goal[1]) < 0.3) { const [x, y] = RT.choice(this.walkableCells()); mm.goal = [x + 0.5, y + 0.5]; }
-          this.stepToward(mm.goal[0], mm.goal[1], 0.9, dt);
-          const sees = this.candleLit && d < 8 && this.los(mm.x, mm.y, p.x, p.y);
+          this.stepToward(mm.goal[0], mm.goal[1], RT.lerp(0.8, 1.3, this.diff()), dt);
+          const sees = this.candleLit && d < RT.lerp(7, 11, this.diff()) && this.los(mm.x, mm.y, p.x, p.y);
           if (sees || (this.sprinting && d < 9)) { mm.state = 'hunt'; mm.goal = [p.x, p.y]; }
           break;
         }
@@ -616,20 +633,27 @@
           const dx = mm.x - p.x, dy = mm.y - p.y, l = Math.hypot(dx, dy) || 1;
           const nx = mm.x + dx / l * 1.1 * dt, ny = mm.y + dy / l * 1.1 * dt;
           if (this.walkable(nx, ny)) { mm.x = nx; mm.y = ny; }
-          if (mm.timer <= 0) { mm.state = 'gone'; mm.timer = RT.rand(8, 18); }
+          if (mm.timer <= 0) { mm.state = 'gone'; mm.timer = RT.lerp(14, 4, this.diff()) * RT.rand(0.7, 1.3); }
           break;
         }
       }
 
       // a lit candle near him goes out
       const d2 = RT.dist(mm.x, mm.y, p.x, p.y);
-      if (this.candleLit && mm.state !== 'gone' && mm.state !== 'retreat' && d2 < 3.0 && !this.strike) {
+      if (this.candleLit && mm.state !== 'gone' && mm.state !== 'retreat' && d2 < this.blowRadius() && !this.strike && !this.swing) {
         mm.state = 'close'; mm.closeSpeed = Math.max(0.25, (d2 - 1.1) / 9);
         this.blowOut();
       }
       // being touched = attacked
       if (mm.state !== 'gone' && mm.state !== 'retreat' && d2 < 0.55) this.die('caught');
 
+      // he doesn't walk so much as skip: every so often he lurches forward
+      if ((mm.state === 'hunt' || mm.state === 'close') && Math.random() < dt * 0.35 && d2 > 1.6) {
+        const k = 0.35 / Math.max(0.01, d2); const nx = mm.x + (p.x - mm.x) * k, ny = mm.y + (p.y - mm.y) * k;
+        if (this.walkable(nx, ny)) { mm.x = nx; mm.y = ny; }
+      }
+      mm.sprite.shake = d2 < 4 ? (4 - d2) * 1.5 : 0;
+      mm.sprite.x = mm.x; mm.sprite.y = mm.y;
       // floor creaks as he moves
       if (mm.state !== 'gone' && d < 10 && Math.random() < dt * 0.25) RT.Audio.creak(RT.clamp(Math.sin(RT.angleDiff(Math.atan2(mm.y - p.y, mm.x - p.x), p.a)), -1, 1));
     }
@@ -691,10 +715,11 @@
       this.placeMM(p.x + Math.cos(p.a) * 0.45, p.y + Math.sin(p.a) * 0.45);
       this.mm.sprite.x = this.mm.x; this.mm.sprite.y = this.mm.y; this.mm.sprite.hidden = false; this.mm.sprite.h = 1.5; this.mm.state = 'close';
       this.ui.flash('rgba(160,0,0,0.6)');
+      this.ui.jumpscare(RT.Tex.faces.mm, 1.3);
       // a burst of light so you see exactly what took you
       this.ambient = 0.9; this.lights.length = 0; this.fx.hallucinate = 0.35;
       RT.Audio.scream();
-      setTimeout(() => this.game.endLevel('dead', reason), 1400);
+      setTimeout(() => this.game.endLevel('dead', reason), 1500);
     }
 
     // ---------- HUD + audio ----------
@@ -702,21 +727,36 @@
       const pr = this.prep, i = this.inv;
       if (this.phase === 'prep') {
         const lightsLeft = this.lightsOnCount();
+        const desk = this.propOf('paper'), door = { x: 11.5, y: 16.7, name: 'Front door' };
+        const sw = this.nearestSwitch();
         const steps = [
-          [!!pr.name, 'Write your full name on paper  (the study desk)'],
-          [pr.blood, 'Add a drop of your own blood'],
-          [pr.paperTaken, 'Take the paper'],
-          [i.candle || pr.offering >= 1, 'Find a candle'],
-          [i.matches > 0 || pr.offering >= 2, 'Find matches'],
-          [i.salt, 'Find salt'],
-          [lightsLeft === 0 && pr.offering >= 0, `Turn off every light in the house  (${7 - lightsLeft}/7)`],
-          [pr.offering >= 2 || pr.blown, 'At the front door: lay down your name, set the candle on it, light it'],
-          [pr.knocks >= 22, `Knock 22 times  (${pr.knocks}/22)`],
-          [pr.closed, 'Open the door, blow out the candle, close the door'],
-          [false, 'Immediately relight your candle'],
+          [!!pr.name, 'Write your full name on paper', desk],
+          [pr.blood, 'Add a drop of your own blood', i.needle ? desk : this.propOf('needle', 'Needle')],
+          [pr.paperTaken, 'Take the paper', desk],
+          [i.candle || pr.offering >= 1, 'Find a candle', this.propOf('candle', 'Candle')],
+          [i.matches > 0 || pr.offering >= 2, 'Find matches', this.propOf('matches', 'Matches')],
+          [i.salt, 'Find salt', this.propOf('salt', 'Salt')],
+          [lightsLeft === 0, `Turn off every light in the house  (${7 - lightsLeft}/7)`, sw],
+          [pr.offering >= 2 || pr.blown, 'At the front door: lay down your name, set the candle on it, light it', door],
+          [pr.knocks >= 22, `Knock 22 times  (${pr.knocks}/22)`, door],
+          [pr.closed, 'Open the door, blow out the candle, close the door', door],
+          [false, 'Immediately relight your candle  [R]', null],
         ];
+        const p = this.player;
+        let marker = null;
+        for (const st of steps) {
+          const tg = st[2];
+          if (!st[0] && tg) {
+            const m = (RT.dist(p.x, p.y, tg.x, tg.y) * 1.5).toFixed(0);
+            st[1] += `  ·  ${m} m`;
+            if (!marker) marker = { x: tg.x, y: tg.y, label: `${tg.name || ''} ${m} m` };
+          }
+          if (!st[0] && !marker && !tg) break;
+        }
         this.ui.setObjectives(steps);
+        this.ui.setMarker(this, marker);
       } else {
+        this.ui.setMarker(this, null);
         this.ui.setObjectives(null, this.phase === 'trapped' ? 'Stay inside the salt until 3:33 A.M.' : this.phase === 'halluc' ? '...' : 'Survive until 3:33 A.M.  Keep moving. Keep the flame.');
       }
       let alarm = null;

@@ -432,6 +432,7 @@
     return c;
   }
 
+  RT.TexUtil = { makeTex, canvasTex, shade, wallpaper, plaster, tiles, panels, planks, carpet, checker, ceiling, stains };
   RT.Tex = {};
   RT.buildTextures = function () {
     const T = RT.Tex;
@@ -468,5 +469,6 @@
       T.v[name] = S[name](false); T.v[name + '_item'] = S[name](true);
     }
     T.offering = [S.doorOffering(0), S.doorOffering(1), S.doorOffering(2, 0), S.doorOffering(2, 1)];
+    if (RT.buildTextures2) RT.buildTextures2(T);
   };
 })(window.RT);

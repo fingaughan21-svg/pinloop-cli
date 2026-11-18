@@ -116,6 +116,37 @@
       o.connect(g); this.out(g, wet); o.start(t); o.stop(t + dur + 0.05);
     },
 
+    // ---- level 2 ----
+    ding(n = 1) { for (let i = 0; i < n; i++) setTimeout(() => { this.tone(1318, 1.2, 0.18, 'sine', 0.4); this.tone(1046, 1.4, 0.14, 'sine', 0.4); }, i * 260); },
+    doorSlide() { this.burst({ freq: 300, type: 'lowpass', dur: 1.3, vol: 0.25, attack: 0.2, wet: 0.2, src: 'brown' }); this.tone(70, 1.2, 0.08, 'sawtooth', 0.1); },
+    breath() { for (let i = 0; i < 3; i++) setTimeout(() => this.burst({ freq: 700, type: 'bandpass', q: 0.8, dur: 0.5, vol: 0.18, attack: 0.15, wet: 0.1 }), i * 650); },
+    gasp() { this.burst({ freq: 1200, type: 'bandpass', q: 1.5, dur: 0.35, vol: 0.3, attack: 0.02, wet: 0.3 }); },
+    giggle() { for (let i = 0; i < 5; i++) setTimeout(() => this.tone(700 + Math.random() * 300, 0.12, 0.05, 'triangle', 0.7, 500), i * 140); },
+    thud() { this.tone(50, 0.6, 0.5, 'sine', 0.5, 30); this.burst({ freq: 150, dur: 0.4, vol: 0.4, wet: 0.5, src: 'brown' }); },
+    setHum(v) {
+      if (!this.ctx) return;
+      if (!this.hum) {
+        const ctx = this.ctx; this.hum = ctx.createGain(); this.hum.gain.value = 0; this.out(this.hum, 0.1);
+        for (const f of [50, 100, 150.5]) { const o = ctx.createOscillator(); o.frequency.value = f; const g = ctx.createGain(); g.gain.value = 0.25 / (f / 50); o.connect(g); g.connect(this.hum); o.start(); }
+      }
+      this.hum.gain.setTargetAtTime(v, this.ctx.currentTime, 0.3);
+    },
+    // a cheap, slightly broken music box: elevator music for the end of the world
+    music(on, detune = 0) {
+      this.musicOn = on; this.musicDetune = detune;
+      if (!on || this.musicTimer) return;
+      const melody = [0, 4, 7, 12, 11, 7, 4, 2, 0, 4, 7, 9, 7, 4, 2, -1];
+      let i = 0;
+      const tick = () => {
+        if (!this.musicOn || !this.ctx) { this.musicTimer = null; return; }
+        const n = melody[i++ % melody.length];
+        const f = 523.25 * Math.pow(2, (n + (Math.random() - 0.5) * this.musicDetune) / 12);
+        this.tone(f, 0.9, 0.05, 'triangle', 0.6); this.tone(f * 2.01, 0.4, 0.015, 'sine', 0.6);
+        this.musicTimer = setTimeout(tick, 330 + this.musicDetune * 80 * Math.random());
+      };
+      tick();
+    },
+
     knock(vol = 0.9) { this.burst({ freq: 300, dur: 0.18, vol, wet: 0.5 }); this.tone(95, 0.15, vol * 0.8, 'sine', 0.4, 60); },
     step() { this.burst({ freq: 220 + Math.random() * 120, dur: 0.09, vol: 0.12, wet: 0.1, src: 'brown' }); },
     click() { this.burst({ freq: 3500, type: 'bandpass', q: 3, dur: 0.04, vol: 0.4, wet: 0.1 }); },

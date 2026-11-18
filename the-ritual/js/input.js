@@ -6,6 +6,9 @@
     ShiftLeft: 'sprint', ShiftRight: 'sprint',
     KeyE: 'interact', Enter: 'interact', KeyR: 'relight', KeyQ: 'salt', KeyF: 'flashlight',
     Escape: 'pause', KeyP: 'pause', KeyJ: 'journal', Tab: 'journal', Space: 'wait',
+    KeyT: 'talk', KeyC: 'close', KeyO: 'open',
+    Digit1: 'f1', Digit2: 'f2', Digit3: 'f3', Digit4: 'f4', Digit5: 'f5', Digit6: 'f6', Digit7: 'f7', Digit8: 'f8', Digit9: 'f9', Digit0: 'f10',
+    Numpad1: 'f1', Numpad2: 'f2', Numpad3: 'f3', Numpad4: 'f4', Numpad5: 'f5', Numpad6: 'f6', Numpad7: 'f7', Numpad8: 'f8', Numpad9: 'f9', Numpad0: 'f10',
   };
   const I = {
     held: {}, pressed: {}, lookDX: 0, moveX: 0, moveY: 0, lastInput: 0, sensitivity: 1, touch: false,
@@ -26,7 +29,7 @@
       });
       window.addEventListener('keyup', (e) => { const a = KEYS[e.code]; if (a) this.release(a); });
       window.addEventListener('blur', () => this.clear());
-      canvas.addEventListener('click', () => { if (RT.Game && RT.Game.state === 'play' && !this.touch) canvas.requestPointerLock?.(); });
+      canvas.addEventListener('click', () => { if (RT.Game && RT.Game.state === 'play' && !this.touch && !RT.Game.keepUnlocked) canvas.requestPointerLock?.(); });
       document.addEventListener('mousemove', (e) => {
         if (document.pointerLockElement === canvas) { this.lookDX += RT.clamp(e.movementX, -200, 200) * 0.0025 * this.sensitivity; this.lastInput = performance.now(); }
       });
@@ -35,7 +38,7 @@
       });
       document.addEventListener('mouseup', (e) => { if (e.button === 0) this.release('interact'); });
       document.addEventListener('pointerlockchange', () => {
-        if (!document.pointerLockElement && RT.Game && RT.Game.state === 'play' && !this.touch) RT.Game.pause();
+        if (!document.pointerLockElement && RT.Game && RT.Game.state === 'play' && !this.touch && !RT.Game.keepUnlocked) RT.Game.pause();
       });
       this.initTouch();
     },

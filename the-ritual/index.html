@@ -27,7 +27,21 @@
     <div id="msg"></div>
     <div id="inv"></div>
     <div id="crosshair"></div>
+    <div id="stamina" class="hidden"><div id="staminaFill"></div><span>BREATH</span></div>
+    <div id="marker" class="hidden"><div class="dia"></div><span></span></div>
+    <div id="swing" class="hidden">
+      <div class="lbl">STRIKE THE MATCH &mdash; press [E] or [R] in the zone</div>
+      <div class="track"><div id="swingZone"></div><div id="swingMark"></div></div>
+    </div>
   </div>
+
+  <div id="panelUI" class="hidden">
+    <div class="pdisp" id="pdisp">1</div>
+    <div class="pgrid" id="pgrid"></div>
+    <div class="prow"><button data-p="open">&#9664;&#9654;</button><button data-p="close">&#9654;&#9664;</button></div>
+    <button class="pback" data-p="back">Step back [E]</button>
+  </div>
+  <canvas id="jump" class="hidden" width="96" height="96"></canvas>
 
   <div id="touch" class="hidden">
     <div id="stick"><div id="knob"></div></div>
@@ -37,6 +51,7 @@
       <button class="tbtn" data-act="salt">SALT</button>
       <button class="tbtn" data-act="wait">WAIT</button>
       <button class="tbtn" data-act="flashlight">TORCH</button>
+      <button class="tbtn l2only" data-act="talk">TALK</button>
     </div>
     <div class="tbtns top">
       <button class="tbtn small" data-act="journal">RULES</button>
@@ -60,11 +75,7 @@
   <!-- Intro -->
   <div id="intro" class="screen hidden">
     <div class="panel narrow">
-      <h2>LEVEL 1 &mdash; THE MIDNIGHT MAN</h2>
-      <p>You found the instructions on an old forum thread, posted by an account that no longer exists. Everyone in the replies said it was nonsense.</p>
-      <p>It is 11:59 p.m. The house is quiet. You are alone.</p>
-      <p>Prepare the ritual exactly as written. Once he is inside, survive until <b>3:33 a.m.</b></p>
-      <p class="dim">Each in-game hour lasts five real minutes. Read the rules with <b>J</b> at any time.</p>
+      <div id="introBody"></div>
       <div class="row"><button id="begin" class="primary">Begin</button><button data-go="menu">Back</button></div>
     </div>
   </div>
@@ -85,37 +96,7 @@
   <!-- Rules / journal -->
   <div id="journal" class="screen hidden">
     <div class="panel paper scroll">
-      <h2>The Midnight Game</h2>
-      <p class="dim">Copied by hand from the thread. Do not skip a step.</p>
-      <h3>Before midnight</h3>
-      <ol>
-        <li>Write your <b>full name</b> (first, middle and last) on a piece of paper.</li>
-        <li>Put at least one drop of <b>your own blood</b> on it and let it soak in.</li>
-        <li>Turn off <b>every</b> light in the house.</li>
-        <li>At your wooden front door, lay the paper down, set a <b>candle</b> on it and light it.</li>
-        <li><b>Knock 22 times.</b> The last knock must land at exactly 12:00 a.m.</li>
-        <li>Open the door, blow out the candle, close the door. You have let the Midnight Man in.</li>
-        <li><b>Immediately relight your candle.</b> The game has begun.</li>
-      </ol>
-      <h3>Until 3:33 a.m.</h3>
-      <ul>
-        <li>Wander the dark house with your candle. Avoid the Midnight Man at all costs.</li>
-        <li>If the candle goes out, <b>he is near</b>. Relight it within <b>ten seconds</b>.</li>
-        <li>If you cannot, <b>immediately</b> surround yourself with a <b>circle of salt</b> and stay inside it until 3:33.</li>
-        <li>Fail both, and he will show you your greatest fear until 3:33.</li>
-        <li>Signs he is close: a sudden <b>cold</b>, a <b>pure black figure</b> in the dark, soft <b>whispering</b>. Move away.</li>
-        <li>Staying in one spot will only let him find you. <b>Keep moving.</b></li>
-      </ul>
-      <h3>Never</h3>
-      <ul>
-        <li>Never turn on a light.</li>
-        <li>Never use a flashlight.</li>
-        <li>Never go to sleep.</li>
-        <li>Never use another person's blood on your name.</li>
-        <li>Never use a lighter in place of the candle. It will not work.</li>
-        <li>Never provoke the Midnight Man in <b>any</b> way.</li>
-      </ul>
-      <p>To win, last until 3:33 a.m. without being caught or trapped in the salt.</p>
+      <div id="journalBody"></div>
       <div class="row"><button id="journalClose" class="primary">Close</button></div>
     </div>
   </div>
@@ -133,6 +114,8 @@
         <tr><td>Q (hold)</td><td>Pour a salt circle</td></tr>
         <tr><td>F</td><td>Flashlight</td></tr>
         <tr><td>Space (hold)</td><td>Wait out the night (when trapped)</td></tr>
+        <tr><td>1&ndash;9, 0 / C / O</td><td>Elevator panel: floors (0 = 10), close, open</td></tr>
+        <tr><td>T</td><td>Talk</td></tr>
         <tr><td>J / Tab</td><td>Read the rules</td></tr>
         <tr><td>Esc / P</td><td>Pause</td></tr>
       </table>
@@ -180,11 +163,14 @@
 
 <script src="js/util.js"></script>
 <script src="js/textures.js"></script>
+<script src="js/textures2.js"></script>
 <script src="js/map.js"></script>
 <script src="js/renderer.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/input.js"></script>
+<script src="js/common.js"></script>
 <script src="js/level1.js"></script>
+<script src="js/level2.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
