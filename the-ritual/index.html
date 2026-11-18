@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>The Ritual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game">
+  <canvas id="view"></canvas>
+  <div id="frost" class="ov"></div>
+  <div id="drowsy" class="ov"></div>
+  <div id="darken" class="ov"></div>
+  <div id="flash" class="ov"></div>
+
+  <div id="hud" class="hidden">
+    <div id="clock">11:59 P.M.</div>
+    <div id="objectives"></div>
+    <div id="alarm" class="hidden"><div id="alarmText"></div><div class="bar"><div id="alarmBar"></div></div></div>
+    <div id="big" class="hidden"><div id="bigMain"></div><div id="bigSub"></div></div>
+    <div id="prompt"></div>
+    <div id="msg"></div>
+    <div id="inv"></div>
+    <div id="crosshair"></div>
+  </div>
+
+  <div id="touch" class="hidden">
+    <div id="stick"><div id="knob"></div></div>
+    <div class="tbtns right">
+      <button class="tbtn big" data-act="interact">USE</button>
+      <button class="tbtn" data-act="relight">RELIGHT</button>
+      <button class="tbtn" data-act="salt">SALT</button>
+      <button class="tbtn" data-act="wait">WAIT</button>
+      <button class="tbtn" data-act="flashlight">TORCH</button>
+    </div>
+    <div class="tbtns top">
+      <button class="tbtn small" data-act="journal">RULES</button>
+      <button class="tbtn small" data-act="pause">II</button>
+    </div>
+  </div>
+
+  <!-- Main menu -->
+  <div id="menu" class="screen">
+    <div class="title"><span>THE</span> RITUAL</div>
+    <div class="tag">Some games should never be played.</div>
+    <div id="levels"></div>
+    <div class="row">
+      <button data-go="journalMenu">The Rules</button>
+      <button data-go="settings">Settings</button>
+      <button data-go="controls">Controls</button>
+    </div>
+    <div class="foot">DEMO BUILD &middot; Headphones recommended &middot; Play in the dark</div>
+  </div>
+
+  <!-- Intro -->
+  <div id="intro" class="screen hidden">
+    <div class="panel narrow">
+      <h2>LEVEL 1 &mdash; THE MIDNIGHT MAN</h2>
+      <p>You found the instructions on an old forum thread, posted by an account that no longer exists. Everyone in the replies said it was nonsense.</p>
+      <p>It is 11:59 p.m. The house is quiet. You are alone.</p>
+      <p>Prepare the ritual exactly as written. Once he is inside, survive until <b>3:33 a.m.</b></p>
+      <p class="dim">Each in-game hour lasts five real minutes. Read the rules with <b>J</b> at any time.</p>
+      <div class="row"><button id="begin" class="primary">Begin</button><button data-go="menu">Back</button></div>
+    </div>
+  </div>
+
+  <!-- Name entry -->
+  <div id="nameDialog" class="screen hidden">
+    <div class="panel narrow paper">
+      <h2>Write your full name</h2>
+      <p class="dim">First, middle and last. It must be yours.</p>
+      <input id="nFirst" placeholder="First" maxlength="20" autocomplete="off">
+      <input id="nMiddle" placeholder="Middle" maxlength="20" autocomplete="off">
+      <input id="nLast" placeholder="Last" maxlength="20" autocomplete="off">
+      <div id="nameErr" class="err"></div>
+      <div class="row"><button id="nameOk" class="primary">Write it</button><button id="nameCancel">Not yet</button></div>
+    </div>
+  </div>
+
+  <!-- Rules / journal -->
+  <div id="journal" class="screen hidden">
+    <div class="panel paper scroll">
+      <h2>The Midnight Game</h2>
+      <p class="dim">Copied by hand from the thread. Do not skip a step.</p>
+      <h3>Before midnight</h3>
+      <ol>
+        <li>Write your <b>full name</b> (first, middle and last) on a piece of paper.</li>
+        <li>Put at least one drop of <b>your own blood</b> on it and let it soak in.</li>
+        <li>Turn off <b>every</b> light in the house.</li>
+        <li>At your wooden front door, lay the paper down, set a <b>candle</b> on it and light it.</li>
+        <li><b>Knock 22 times.</b> The last knock must land at exactly 12:00 a.m.</li>
+        <li>Open the door, blow out the candle, close the door. You have let the Midnight Man in.</li>
+        <li><b>Immediately relight your candle.</b> The game has begun.</li>
+      </ol>
+      <h3>Until 3:33 a.m.</h3>
+      <ul>
+        <li>Wander the dark house with your candle. Avoid the Midnight Man at all costs.</li>
+        <li>If the candle goes out, <b>he is near</b>. Relight it within <b>ten seconds</b>.</li>
+        <li>If you cannot, <b>immediately</b> surround yourself with a <b>circle of salt</b> and stay inside it until 3:33.</li>
+        <li>Fail both, and he will show you your greatest fear until 3:33.</li>
+        <li>Signs he is close: a sudden <b>cold</b>, a <b>pure black figure</b> in the dark, soft <b>whispering</b>. Move away.</li>
+        <li>Staying in one spot will only let him find you. <b>Keep moving.</b></li>
+      </ul>
+      <h3>Never</h3>
+      <ul>
+        <li>Never turn on a light.</li>
+        <li>Never use a flashlight.</li>
+        <li>Never go to sleep.</li>
+        <li>Never use another person's blood on your name.</li>
+        <li>Never use a lighter in place of the candle. It will not work.</li>
+        <li>Never provoke the Midnight Man in <b>any</b> way.</li>
+      </ul>
+      <p>To win, last until 3:33 a.m. without being caught or trapped in the salt.</p>
+      <div class="row"><button id="journalClose" class="primary">Close</button></div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div id="controls" class="screen hidden">
+    <div class="panel narrow">
+      <h2>Controls</h2>
+      <table class="keys">
+        <tr><td>W A S D / Arrows</td><td>Move / turn</td></tr>
+        <tr><td>Mouse</td><td>Look (click the screen to capture)</td></tr>
+        <tr><td>Shift</td><td>Run (he can hear you)</td></tr>
+        <tr><td>E / Left click</td><td>Use / pick up</td></tr>
+        <tr><td>R</td><td>Strike a match / relight</td></tr>
+        <tr><td>Q (hold)</td><td>Pour a salt circle</td></tr>
+        <tr><td>F</td><td>Flashlight</td></tr>
+        <tr><td>Space (hold)</td><td>Wait out the night (when trapped)</td></tr>
+        <tr><td>J / Tab</td><td>Read the rules</td></tr>
+        <tr><td>Esc / P</td><td>Pause</td></tr>
+      </table>
+      <p class="dim">Touch: left thumb moves (push to the edge to run), right thumb looks, buttons on the right.</p>
+      <div class="row"><button data-go="back" class="primary">Back</button></div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div id="settings" class="screen hidden">
+    <div class="panel narrow">
+      <h2>Settings</h2>
+      <label>Look sensitivity <input type="range" id="sens" min="0.3" max="2.5" step="0.1" value="1"></label>
+      <label>Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+      <div class="row"><button data-go="back" class="primary">Back</button></div>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div id="pause" class="screen hidden">
+    <div class="panel narrow">
+      <h2>Paused</h2>
+      <p class="dim">The clock has stopped. He has not.</p>
+      <div class="col">
+        <button id="resume" class="primary">Resume</button>
+        <button data-go="journal">The Rules</button>
+        <button data-go="settings">Settings</button>
+        <button data-go="controls">Controls</button>
+        <button id="quit">Quit to menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ending -->
+  <div id="ending" class="screen hidden">
+    <div class="panel narrow">
+      <h1 id="endTitle"></h1>
+      <p id="endText"></p>
+      <p id="endStats" class="dim"></p>
+      <div id="endNext"></div>
+      <div class="row"><button id="retry" class="primary">Play again</button><button id="toMenu">Main menu</button></div>
+    </div>
+  </div>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/textures.js"></script>
+<script src="js/map.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/input.js"></script>
+<script src="js/level1.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
